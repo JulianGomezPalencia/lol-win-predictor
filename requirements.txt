@@ -1,0 +1,3 @@
+requests>=2.32       # make HTTP calls to the Riot API
+python-dotenv>=1.0   # load the API key from .env
+pytest>=8.0          # run tests
