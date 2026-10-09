@@ -23,24 +23,28 @@ HEADERS = {"X-Riot-Token": API_KEY}
 
 
 def get_puuid(game_name: str, tag_line: str) -> str:
-    # TODO: call account-v1 "by-riot-id" and return the "puuid" field.
-    # Hint: url = f"{REGION_URL}/riot/account/v1/accounts/by-riot-id/{game_name}/{tag_line}"
-    # Hint: response = requests.get(url, headers=HEADERS, timeout=10)
-    # Hint: response.raise_for_status() turns 4xx/5xx errors into exceptions — use it!
-    # Hint: response.json() gives you a Python dict.
-    raise NotImplementedError
+    url = f"{REGION_URL}/riot/account/v1/accounts/by-riot-id/{game_name}/{tag_line}"
+    response = requests.get(url, headers=HEADERS, timeout=10)
+    response.raise_for_status()
+    content = response.json()
+    return content["puuid"]
+    
 
 
 def get_match_ids(puuid: str, count: int = 5) -> list[str]:
-    # TODO: call match-v5 "matches/by-puuid/{puuid}/ids".
-    # Hint: pass query parameters with requests.get(url, headers=..., params={"queue": 420, "count": count})
-    #       queue 420 = Ranked Solo/Duo
-    raise NotImplementedError
+    url = f"{REGION_URL}/lol/match/v5/matches/by-puuid/{puuid}/ids"
+    response = requests.get(url, headers=HEADERS, timeout=10, params={"queue": 420, "count": count})
+    response.raise_for_status()
+    match_ids = response.json()
+    return match_ids
 
 
 def get_match(match_id: str) -> dict:
-    # TODO: call match-v5 "matches/{match_id}" and return the JSON.
-    raise NotImplementedError
+    url = f"{REGION_URL}/lol/match/v5/matches/{match_id}"
+    response = requests.get(url, headers=HEADERS, timeout=10)
+    response.raise_for_status()
+    match = response.json()
+    return match
 
 
 def main():
@@ -56,11 +60,31 @@ def main():
     match_ids = get_match_ids(puuid)
     print("Last ranked games:", match_ids)
 
-    # TODO: fetch the first match, then find YOUR participant inside it.
-    # Hint: match["info"]["participants"] is a list of 10 dicts.
-    #       Find the one whose "puuid" equals yours.
-    #       Then print its "win", "championName" and "teamPosition".
-    # Bonus: print match["info"]["gameDuration"] and match["info"]["gameVersion"] (the patch).
+    if not match_ids:
+        print("No matches found")
+        return
+    
+    match = get_match(match_ids[0])
+    match_info = match["info"]
+
+    for player in match_info["participants"]:
+        if player["puuid"] == puuid:
+            win = player["win"]
+            champion_name = player["championName"]
+            team_position = player["teamPosition"]
+            print(f"Win: {win}")
+            print(f"Champion name: {champion_name}")
+            print(f"Team position: {team_position}")
+            break
+
+    game_duration = match_info["gameDuration"]
+    game_version = match_info["gameVersion"]
+    print(f"Game duration: {game_duration // 60}:{game_duration % 60}")
+    print(f"Game version: {game_version}")
+
+    
+
+
 
 
 if __name__ == "__main__":
