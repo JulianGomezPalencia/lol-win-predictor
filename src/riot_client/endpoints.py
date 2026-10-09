@@ -1,5 +1,6 @@
 from src.riot_client.config import REGION_URL
 from src.riot_client.client import get
+from src.riot_client.cache import load_match, save_match
 
 
 def get_puuid(game_name: str, tag_line: str) -> str:
@@ -14,8 +15,16 @@ def get_match_ids(puuid: str, count: int = 5) -> list[str]:
 
 
 def get_match(match_id: str) -> dict:
+    cached = load_match(match_id)
+    if cached is not None:
+        return cached
+    
     match = get(f"{REGION_URL}/lol/match/v5/matches/{match_id}")
+    save_match(match_id, match)
     return match
+
+
+    
 
 
 
