@@ -9,8 +9,15 @@ def get_puuid(game_name: str, tag_line: str) -> str:
     
 
 
-def get_match_ids(puuid: str, count: int = 5) -> list[str]:
-    match_ids = get(f"{REGION_URL}/lol/match/v5/matches/by-puuid/{puuid}/ids", params={"queue": 420, "count": count})
+def get_match_ids(puuid: str, count: int = 5, start_time: int | None = None, end_time: int | None = None) -> list[str]:
+    params={"queue": 420, "count": count}
+
+    if start_time is not None:
+        params["startTime"] = start_time
+    if end_time is not None:
+        params["endTime"] = end_time
+    
+    match_ids = get(f"{REGION_URL}/lol/match/v5/matches/by-puuid/{puuid}/ids", params=params)
     return match_ids
 
 
