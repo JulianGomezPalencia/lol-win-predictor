@@ -54,3 +54,40 @@ def count_players_by_tier(conn: sqlite3.Connection) -> dict[str, int]:
     rows = conn.execute("SELECT tier, COUNT(*) AS n FROM players GROUP BY tier").fetchall()
     tier_count = {row["tier"]: row["n"] for row in rows}
     return tier_count
+
+
+# --- Agent 2: match discovery ---------------------------------------------
+
+
+def get_all_players(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """Return every player row (each works like a dict: row["puuid"], row["tier"], ...)."""
+    sql = """
+        SELECT puuid, tier 
+        FROM players 
+        ORDER BY tier
+    """
+    return conn.execute(sql).fetchall()
+
+
+def add_target_match(conn: sqlite3.Connection, match_id: str, seed_puuid: str, seed_tier: str) -> bool:
+    """Add a match to the queue with status 'pending'. Return True if it was new, False if
+    we already had it (two seed players can share a match — we only want it once)."""
+    discovered_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    sql = """
+        INSERT INTO target_matches (match_id, seed_puuid, seed_tier, discovered_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(match_id) DO NOTHING
+    """
+    cursor = conn.execute(sql, (match_id, seed_puuid, seed_tier, discovered_at))
+    conn.commit()
+
+    return cursor.rowcount == 1
+   
+
+
+def count_target_matches_by_status(conn: sqlite3.Connection) -> dict[str, int]:
+    """e.g. {"pending": 1500}. Later: {"pending": 200, "fetched": 1100, "invalid": 30, ...}"""
+    rows = conn.execute("SELECT status, COUNT(*) AS n FROM target_matches GROUP BY status").fetchall()
+    matches_count = {row["status"]: row["n"] for row in rows}
+    return matches_count
+    
