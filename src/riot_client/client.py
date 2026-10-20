@@ -29,18 +29,23 @@ def _wait_for_rate_limit() -> None:
 def get(url: str, params: dict | None = None) -> dict | list:
     """GET a Riot API url and return the parsed JSON, handling rate limits and retries."""
     for attempt in range(MAX_RETRIES):
+        is_last_attempt = attempt == MAX_RETRIES - 1
         _wait_for_rate_limit()
-        response = requests.get(url, headers=HEADERS, params=params, timeout=10)
+        try:
+            response = requests.get(url, headers=HEADERS, params=params, timeout=10)
+        except (requests.ConnectionError, requests.Timeout):
+            # A network blip (Wi-Fi drop, slow answer) is temporary, like a 5xx: wait and retry.
+            if not is_last_attempt:
+                time.sleep(2 ** attempt)
+            continue
         if response.status_code == 429:
-            wait = int(response.headers.get("Retry-After", 1))
-            time.sleep(wait)
+            if not is_last_attempt:
+                time.sleep(int(response.headers.get("Retry-After", 1)))
             continue
         if response.status_code >= 500:
-            time.sleep(2 ** attempt)
+            if not is_last_attempt:
+                time.sleep(2 ** attempt)
             continue
         response.raise_for_status()
         return response.json()
     raise RuntimeError(f"Gave up on {url} after {MAX_RETRIES} attempts")
-
-    
-
