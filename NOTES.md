@@ -4,7 +4,7 @@ Things to fix or improve later. Check items off as they're done.
 
 ## Fixes
 
-- [ ] **`client.get()` wastes a sleep on the last attempt** (`src/riot_client/client.py`)
+- [x] **`client.get()` wastes a sleep on the last attempt** — fixed, with a test. `get()` now also retries network errors (Wi-Fi drops, timeouts). (`src/riot_client/client.py`)
   When the final attempt gets a 429 or 5xx, `get()` still sleeps (Retry-After or backoff)
   before the loop ends and raises `RuntimeError`, so that wait is pointless.
   Idea: only sleep if there's another attempt left (`attempt < MAX_RETRIES - 1`).
@@ -12,7 +12,7 @@ Things to fix or improve later. Check items off as they're done.
 
 ## Data design
 
-- [ ] **Unranked match participants** (still in placements / no ranked games this season)
+- [x] **Unranked match participants** — done in Agent 5: `player_snapshots` rank columns allow NULL. (still in placements / no ranked games this season)
   Seed players are always ranked (league-v4 only lists ranked players), so `players.lp NOT NULL`
   is correct — checked: 400 players, 0 nulls, 18 with lp = 0 (valid, just placed / demoted).
   But the other 9 players in each match may be unranked: league-v4 by-puuid returns `[]` for them.
