@@ -18,7 +18,7 @@ def main():
     if not match_ids:
         print("No matches found")
         return
-    
+
     match = get_match(match_ids[0])
     match_info = match["info"]
 
@@ -36,10 +36,6 @@ def main():
     game_version = match_info["gameVersion"]
     print(f"Game duration: {game_duration // 60}:{game_duration % 60:02d}")
     print(f"Game version: {game_version}")
-
-    
-
-
 
 
 if __name__ == "__main__":
