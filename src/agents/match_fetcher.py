@@ -12,6 +12,8 @@ Safe to stop with Ctrl+C and re-run: it only picks up matches that are still 'pe
 Run it:   python -m src.agents.match_fetcher
 Tests:    pytest tests/test_match_fetcher.py -v
 """
+import requests
+
 from src.riot_client import endpoints
 from src.storage import db
 
@@ -91,8 +93,13 @@ def fetch_pending(conn) -> dict[str, int]:
     match_ids = db.get_match_ids_by_status(conn, "pending")
     counts: dict[str, int] = {}
     for i, match_id in enumerate(match_ids, start=1):
-        match = endpoints.get_match(match_id)
-        reason = invalid_reason(match)
+        try:
+            match = endpoints.get_match(match_id)
+        except requests.HTTPError as error:
+            if not endpoints.is_not_found(error):
+                raise  # e.g. 403 expired key: stop, so nothing is marked wrongly
+            match = None
+        reason = "not found" if match is None else invalid_reason(match)
         if reason:
             db.mark_match_invalid(conn, match_id)
             counts[reason] = counts.get(reason, 0) + 1
