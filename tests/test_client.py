@@ -40,6 +40,8 @@ def fake_api(monkeypatch):
     def fake_get(url, **kwargs):
         response = state["responses"][state["calls"]]
         state["calls"] += 1
+        if isinstance(response, Exception):
+            raise response
         return response
 
     monkeypatch.setattr(client.requests, "get", fake_get)
@@ -97,3 +99,17 @@ def test_rate_limiter_does_not_sleep_when_enough_time_passed(fake_api, monkeypat
     monkeypatch.setattr(client, "_last_call_time", 90.0)
     client._wait_for_rate_limit()
     assert fake_api["sleeps"] == []
+
+
+def test_no_pointless_sleep_after_the_last_attempt(fake_api, monkeypatch):
+    monkeypatch.setattr(client, "_wait_for_rate_limit", lambda: None)  # only count backoff sleeps
+    fake_api["responses"] = [FakeResponse(500)] * client.MAX_RETRIES
+    with pytest.raises(RuntimeError):
+        client.get("https://example")
+    assert len(fake_api["sleeps"]) == client.MAX_RETRIES - 1, "giving up right away — no wait before it"
+
+
+def test_retries_after_network_error(fake_api):
+    fake_api["responses"] = [requests.ConnectionError("wifi dropped"), FakeResponse(200, {"ok": True})]
+    assert client.get("https://example") == {"ok": True}
+    assert fake_api["calls"] == 2
