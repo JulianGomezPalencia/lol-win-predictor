@@ -74,3 +74,26 @@ def test_get_match_reads_existing_cache_without_calling_riot(temp_cache, fake_ri
     cache.save_match("LA1_123", FAKE_MATCH)
     assert endpoints.get_match("LA1_123") == FAKE_MATCH
     assert fake_riot == [], "match was already on disk — Riot should not be called at all"
+
+
+# --- Crash safety ---------------------------------------------------------------------
+
+
+def test_save_leaves_no_temp_file(temp_cache):
+    cache.save_match("LA1_123", FAKE_MATCH)
+    assert sorted(p.name for p in temp_cache.iterdir()) == ["LA1_123.json.gz"]
+
+
+def test_damaged_cache_file_counts_as_missing(temp_cache):
+    """A file cut off mid-write (e.g. Ctrl+C) must not block the agent forever."""
+    cache.save_match("LA1_123", FAKE_MATCH)
+    path = cache.cache_path("LA1_123")
+    path.write_bytes(path.read_bytes()[:20])  # simulate a half-written file
+    assert cache.load_match("LA1_123") is None
+
+
+def test_get_match_replaces_a_damaged_cache_file(temp_cache, fake_riot):
+    temp_cache.mkdir(parents=True)
+    cache.cache_path("LA1_123").write_bytes(b"not gzip at all")
+    assert endpoints.get_match("LA1_123") == FAKE_MATCH
+    assert cache.load_match("LA1_123") == FAKE_MATCH, "the damaged file was overwritten with a good one"
