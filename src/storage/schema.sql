@@ -26,3 +26,60 @@ CREATE TABLE IF NOT EXISTS target_matches (
     patch          TEXT,            -- e.g. "16.8"
     blue_win       INTEGER          -- 1 = blue side won, 0 = red side won (SQLite has no true/false)
 );
+
+-- Agent 3 (match fetcher): the 10 players of each valid target match.
+-- Agent 4 will read this table to know whose history to download.
+CREATE TABLE IF NOT EXISTS match_participants (
+    match_id       TEXT NOT NULL,
+    puuid          TEXT NOT NULL,
+    team_id        INTEGER NOT NULL,  -- 100 = blue side, 200 = red side
+    team_position  TEXT NOT NULL,     -- TOP, JUNGLE, MIDDLE, BOTTOM, UTILITY
+    champion_id    INTEGER NOT NULL,
+    champion_name  TEXT NOT NULL,
+    win            INTEGER NOT NULL,  -- 1 / 0
+    PRIMARY KEY (match_id, puuid)     -- a player appears once per match (a "composite" key: two columns together)
+);
+
+-- Agent 4 (history builder): for each fetched target match, each player's last N ranked games
+-- played BEFORE that match started. One row per (target match, player, history game).
+-- We store a small summary instead of the whole JSON so feature engineering is a simple SQL query.
+CREATE TABLE IF NOT EXISTS player_history (
+    target_match_id   TEXT NOT NULL,
+    puuid             TEXT NOT NULL,
+    history_rank      INTEGER NOT NULL,  -- 0 = their most recent game before the target match
+    history_match_id  TEXT NOT NULL,
+    game_start_ts     INTEGER NOT NULL,  -- always < the target match's game_start_ts (no leakage)
+    game_duration     INTEGER NOT NULL,  -- seconds
+    remake            INTEGER NOT NULL,  -- 1 if that history game was a remake (feature code can skip it)
+    win               INTEGER NOT NULL,
+    champion_id       INTEGER NOT NULL,
+    champion_name     TEXT NOT NULL,
+    team_position     TEXT NOT NULL,     -- can be '' when Riot couldn't tell the lane
+    kills             INTEGER NOT NULL,
+    deaths            INTEGER NOT NULL,
+    assists           INTEGER NOT NULL,
+    PRIMARY KEY (target_match_id, puuid, history_rank)
+);
+
+-- Agent 5 (player snapshot): rank and champion mastery of every match participant, read TODAY.
+-- These are snapshots, not values at match time — only trustworthy for recent matches
+-- (see the leakage notes in NOTES.md). Rank columns are NULL for unranked players.
+CREATE TABLE IF NOT EXISTS player_snapshots (
+    puuid          TEXT PRIMARY KEY,
+    tier           TEXT,               -- NULL = unranked in solo queue
+    division       TEXT,
+    lp             INTEGER,
+    ranked_wins    INTEGER,
+    ranked_losses  INTEGER,
+    snapshot_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS champion_mastery (
+    puuid             TEXT NOT NULL,
+    champion_id       INTEGER NOT NULL,
+    mastery_level     INTEGER NOT NULL,
+    mastery_points    INTEGER NOT NULL,
+    last_play_time    INTEGER NOT NULL,  -- milliseconds since 1970
+    snapshot_at       TEXT NOT NULL,
+    PRIMARY KEY (puuid, champion_id)
+);

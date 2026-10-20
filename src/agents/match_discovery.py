@@ -1,5 +1,5 @@
 """
-AGENT 2 — Match discoveryy.
+AGENT 2 — Match discovery.
 
 For each seeded player, ask Riot for their recent ranked match IDs and add them to the
 `target_matches` queue as 'pending'. Agent 3 will download them later.
@@ -37,7 +37,6 @@ def discover(conn, matches_per_player: int = 5, days_back: int = 14) -> int:
         if i % 25 == 0:
             print(f"{i}/{len(players)} players, {new} new matches")
     return new
-
 
 
 def main():
