@@ -1,13 +1,16 @@
 """
 Run the whole data-collection pipeline, agent by agent.
 
-    python -m scripts.run_pipeline                       # every step
-    python -m scripts.run_pipeline --steps fetch,history # only some steps
-    python -m scripts.run_pipeline --limit 20            # cap the slow steps (history, snapshot)
+    python -m scripts.run_pipeline --steps seed,discover  # once: build the dataset's player + match list
+    python -m scripts.run_pipeline                        # process it: fetch, history, snapshot
+    python -m scripts.run_pipeline --limit 20             # cap the slow steps (history, snapshot)
 
-Every agent is safe to re-run: each one only picks up the work that's still left (the
-`status` column of target_matches, or players without a snapshot). So if anything stops
-the run — Ctrl+C, a crash, the laptop sleeping — just run the same command again.
+The default (fetch, history, snapshot) only picks up work that's still left (the `status`
+column of target_matches, or players without a snapshot). So if anything stops the run —
+Ctrl+C, a crash, the laptop sleeping — just run the same command again.
+
+seed and discover are NOT in the default on purpose: re-running them changes the dataset
+(new players, more matches) instead of resuming it. Run them only when you want to grow it.
 
 Steps, in order:
   seed      Agent 1  sample players from every tier (~31 calls)
@@ -22,12 +25,13 @@ from src.agents import history_builder, match_discovery, match_fetcher, player_s
 from src.storage import db
 
 STEPS = ["seed", "discover", "fetch", "history", "snapshot"]
+DEFAULT_STEPS = ["fetch", "history", "snapshot"]  # the resumable ones — see the docstring
 
 
 def main():
     parser = argparse.ArgumentParser(description="Run the LoL data-collection pipeline.")
-    parser.add_argument("--steps", default=",".join(STEPS),
-                        help=f"comma-separated steps to run, in pipeline order (default: {','.join(STEPS)})")
+    parser.add_argument("--steps", default=",".join(DEFAULT_STEPS),
+                        help=f"comma-separated steps from {','.join(STEPS)} (default: {','.join(DEFAULT_STEPS)})")
     parser.add_argument("--limit", type=int, help="max target matches (history) / players (snapshot) this run")
     args = parser.parse_args()
 

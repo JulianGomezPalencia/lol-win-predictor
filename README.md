@@ -18,13 +18,18 @@ cp .env.example .env             # then paste your Riot API key into .env
 ## Collecting the data
 
 ```bash
-python -m scripts.run_pipeline                        # run every agent in order
+python -m scripts.run_pipeline --steps seed,discover   # once: pick players and their matches
+python -m scripts.run_pipeline                         # fetch, history, snapshot (resumable)
 python -m scripts.run_pipeline --steps history --limit 50   # only some steps, capped
-pytest                                                # run all tests
+pytest                                                 # run all tests
 ```
 
-Each agent can also run alone, e.g. `python -m src.agents.match_fetcher`. Every agent only picks up
-the work that's still left, so if a run stops (Ctrl+C, crash, laptop asleep), run the same command again.
+Each agent can also run alone, e.g. `python -m src.agents.match_fetcher`. The default command only
+picks up the work that's still left, so if a run stops (Ctrl+C, crash, laptop asleep), run it again.
+`seed` and `discover` aren't in the default because re-running them grows the dataset instead of resuming it.
+
+Run **one agent at a time**: the rate limiter lives inside each process, so two running together
+would go over Riot's limit (100 requests / 2 minutes).
 
 | # | Agent | What it does | Writes to |
 |---|---|---|---|
