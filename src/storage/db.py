@@ -1,5 +1,5 @@
 """
-EXERCISE 4 — the project database (SQLite).
+The project database (SQLite).
 
 Why a database and not files? The match JSONs are fine as files (we only ever look them up
 by ID). But the pipeline needs to ASK QUESTIONS about its data:
@@ -7,7 +7,7 @@ by ID). But the pipeline needs to ASK QUESTIONS about its data:
 SQL answers those in one line. SQLite is a whole database in a single file
 (data/db/lol.sqlite) and comes built into Python — nothing to install.
 
-How to check your work:
+Tests:
     pytest tests/test_db.py -v
 """
 import sqlite3
@@ -39,14 +39,13 @@ def upsert_player(conn: sqlite3.Connection, puuid: str, tier: str, division: str
         INSERT INTO players (puuid, tier, division, lp, seeded_at)
         VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(puuid) DO UPDATE SET
-            tier = excluded.tier, 
+            tier = excluded.tier,
             division = excluded.division,
-            lp = excluded.lp, 
+            lp = excluded.lp,
             seeded_at = excluded.seeded_at
     """
     conn.execute(sql, (puuid, tier, division, lp, seeded_at))
     conn.commit()
-            
 
 
 def count_players_by_tier(conn: sqlite3.Connection) -> dict[str, int]:
@@ -60,10 +59,10 @@ def count_players_by_tier(conn: sqlite3.Connection) -> dict[str, int]:
 
 
 def get_all_players(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Return every player row (each works like a dict: row["puuid"], row["tier"], ...)."""
+    """Return every player's puuid and tier (each row works like a dict: row["puuid"], row["tier"])."""
     sql = """
-        SELECT puuid, tier 
-        FROM players 
+        SELECT puuid, tier
+        FROM players
         ORDER BY tier
     """
     return conn.execute(sql).fetchall()
@@ -82,7 +81,6 @@ def add_target_match(conn: sqlite3.Connection, match_id: str, seed_puuid: str, s
     conn.commit()
 
     return cursor.rowcount == 1
-   
 
 
 def count_target_matches_by_status(conn: sqlite3.Connection) -> dict[str, int]:
@@ -137,7 +135,7 @@ def save_fetched_match(conn: sqlite3.Connection, match_id: str, summary: dict, p
             """,
             {**summary, "match_id": match_id},
         )
-    
+
 
 # --- Agent 4: history builder ---
 

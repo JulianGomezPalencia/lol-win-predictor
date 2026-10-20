@@ -27,4 +27,27 @@ Things to fix or improve later. Check items off as they're done.
   Options: cap matches per seed_tier when training (sample equally), and/or seed more
   low-elo players. Check this again before training the model.
 
+## From the code review (2026-10-20)
+
+Reviewer 1 reviewed the whole repo; Reviewer 2 verified each finding against the code.
+Confirmed fixes were applied. These were judged real but not urgent:
+
+- [ ] **Check history completeness before feature engineering.** A target is marked `history_done`
+  whatever number of rows it got. Fewer than 10 per player is legitimate (new accounts), but run:
+  `SELECT target_match_id, COUNT(*) FROM player_history GROUP BY 1 ORDER BY 2` and look at the low end.
+- [ ] **Decide whether remakes count toward the 10 history games.** Right now a remake takes a slot
+  (it's stored with `remake = 1`). Option: request more than 10 IDs and keep the first 10 non-remakes.
+- [ ] **History games only store the player's own side.** By design (see schema.sql), the other 9
+  players of a history game aren't in `match_participants`. The full JSON is cached, so this can be
+  backfilled if a feature ever needs it.
+- [ ] **Champion mastery gap.** Agent 5 snapshots each player once. If a later discovery run adds
+  matches where they play a different champion, that champion's mastery is never fetched.
+- [ ] **Store why a match is invalid.** `mark_match_invalid` drops the reason (remake / wrong queue /
+  missing position / not found). Needs a new column: `CREATE TABLE IF NOT EXISTS` won't add it to
+  the existing database, so it needs an `ALTER TABLE target_matches ADD COLUMN invalid_reason TEXT`.
+- [ ] **More tests:** `save_history` rolling back when an insert fails; a history test with all
+  10 participants instead of 1.
+- **One process at a time** (documented in README): the 1.2 s spacing lives inside each process,
+  so two agents running at once would exceed 100 requests / 2 minutes.
+
 ## Ideas
