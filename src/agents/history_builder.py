@@ -20,11 +20,11 @@ import argparse
 
 import requests
 
+from src.agents.match_fetcher import MIN_GAME_DURATION
 from src.riot_client import endpoints
 from src.storage import db
 
 HISTORY_DEPTH = 10
-MIN_GAME_DURATION = 300  # same remake threshold as Agent 3
 
 
 def summarize_for_player(match: dict, puuid: str) -> dict | None:
@@ -57,8 +57,10 @@ def player_history(puuid: str, target_start_ts: int, depth: int = HISTORY_DEPTH)
     for match_id in match_ids:
         try:
             match = endpoints.get_match(match_id)
-        except requests.HTTPError:
-            continue  # a match Riot can't serve anymore — skip it rather than stop the whole run
+        except requests.HTTPError as error:
+            if endpoints.is_not_found(error):
+                continue  # a match Riot can't serve anymore — skip it rather than stop the whole run
+            raise  # anything else (e.g. 403 expired key) must stop the run, not save a half history
         summary = summarize_for_player(match, puuid)
         if summary is None or summary["game_start_ts"] >= target_start_ts:
             continue  # not their game, or not strictly before the target match (leakage guard)

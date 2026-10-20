@@ -13,6 +13,11 @@ from src.storage import db
 TARGET_START = 1_800_000_000_000  # ms
 
 
+class FakeHTTPResponse:
+    def __init__(self, status_code):
+        self.status_code = status_code
+
+
 def history_match(match_id, puuid, start_ts, win=True, duration=1800, champion_id=7):
     other = [{"puuid": f"other{i}", "win": False, "championId": 1, "championName": "X",
               "teamPosition": "TOP", "kills": 0, "deaths": 0, "assists": 0} for i in range(9)]
@@ -53,8 +58,7 @@ def fake_riot(monkeypatch):
 
     def fake_get_match(match_id):
         if match_id == "LA1_GONE":
-            error = requests.HTTPError("404")
-            raise error
+            raise requests.HTTPError("404", response=FakeHTTPResponse(404))
         return calls["matches"][match_id]
 
     monkeypatch.setattr(endpoints, "get_match_ids", fake_get_match_ids)
@@ -120,3 +124,11 @@ def test_no_history_row_is_ever_after_its_target(tmp_path, fake_riot):
         WHERE ph.game_start_ts >= tm.game_start_ts
     """).fetchone()[0]
     assert leaks == 0
+
+
+def test_expired_key_stops_the_run_instead_of_saving_a_partial_history(fake_riot, monkeypatch):
+    def expired_key(match_id):
+        raise requests.HTTPError("403", response=FakeHTTPResponse(403))
+    monkeypatch.setattr(endpoints, "get_match", expired_key)
+    with pytest.raises(requests.HTTPError):
+        history_builder.player_history("me", TARGET_START)

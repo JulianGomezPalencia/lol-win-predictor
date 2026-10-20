@@ -7,6 +7,7 @@ changes one thing (e.g. a short duration) to check that one rule.
 Run with:  pytest tests/test_match_fetcher.py -v
 """
 import pytest
+import requests
 
 from src.agents import match_fetcher
 from src.riot_client import endpoints
@@ -152,3 +153,31 @@ def test_fetch_pending(conn, monkeypatch):
     assert counts == {"fetched": 1, "remake": 1, "wrong queue": 1}
     assert db.count_target_matches_by_status(conn) == {"fetched": 1, "invalid": 2}
     assert match_fetcher.fetch_pending(conn) == {}, "nothing pending left -> nothing to do"
+
+
+class FakeHTTPResponse:
+    def __init__(self, status_code):
+        self.status_code = status_code
+
+
+def test_fetch_pending_marks_missing_match_invalid_instead_of_crashing(conn, monkeypatch):
+    def fake_get_match(match_id):
+        if match_id == "LA1_GONE":
+            raise requests.HTTPError("404", response=FakeHTTPResponse(404))
+        return make_match()
+    monkeypatch.setattr(endpoints, "get_match", fake_get_match)
+    db.add_target_match(conn, "LA1_GONE", "seed", "GOLD")
+    db.add_target_match(conn, "LA1_GOOD", "seed", "GOLD")
+
+    assert match_fetcher.fetch_pending(conn) == {"not found": 1, "fetched": 1}
+    assert db.count_target_matches_by_status(conn) == {"fetched": 1, "invalid": 1}
+
+
+def test_fetch_pending_stops_on_expired_key(conn, monkeypatch):
+    def expired_key(match_id):
+        raise requests.HTTPError("403", response=FakeHTTPResponse(403))
+    monkeypatch.setattr(endpoints, "get_match", expired_key)
+    db.add_target_match(conn, "LA1_1", "seed", "GOLD")
+    with pytest.raises(requests.HTTPError):
+        match_fetcher.fetch_pending(conn)
+    assert db.count_target_matches_by_status(conn) == {"pending": 1}, "still pending -> retried next run"
