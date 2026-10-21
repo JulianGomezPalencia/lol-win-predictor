@@ -14,9 +14,8 @@ TARGET_START = 1_800_000_000_000  # ms
 
 
 class FakeHTTPResponse:
-    def __init__(self, status_code, server=""):
+    def __init__(self, status_code):
         self.status_code = status_code
-        self.headers = {"server": server} if server else {}
 
 
 def history_match(match_id, puuid, start_ts, win=True, duration=1800, champion_id=7):
@@ -135,12 +134,21 @@ def test_expired_key_stops_the_run_instead_of_saving_a_partial_history(fake_riot
         history_builder.player_history("me", TARGET_START)
 
 
-def test_player_blocked_by_firewall_gets_empty_history(monkeypatch):
+def test_player_blocked_by_firewall_is_skipped_without_asking(monkeypatch):
     """Riot's firewall (Cloudflare) blocks PUUIDs containing "--": skip that player, keep going."""
-    def blocked(puuid, count=5, start_time=None, end_time=None):
-        raise requests.HTTPError("403", response=FakeHTTPResponse(403, server="cloudflare"))
-    monkeypatch.setattr(endpoints, "get_match_ids", blocked)
+    def must_not_be_called(*args, **kwargs):
+        raise AssertionError("a blocked player must be skipped before any request")
+    monkeypatch.setattr(endpoints, "get_match_ids", must_not_be_called)
     assert history_builder.player_history("abc--def", TARGET_START) == []
+
+
+def test_firewall_403_for_a_normal_player_still_stops_the_run(monkeypatch):
+    """If the firewall starts blocking us for another reason, stop: don't save empty histories."""
+    def blocked(puuid, count=5, start_time=None, end_time=None):
+        raise requests.HTTPError("403", response=FakeHTTPResponse(403))
+    monkeypatch.setattr(endpoints, "get_match_ids", blocked)
+    with pytest.raises(requests.HTTPError):
+        history_builder.player_history("normal-puuid", TARGET_START)
 
 
 def test_riot_403_on_match_ids_still_stops_the_run(monkeypatch):

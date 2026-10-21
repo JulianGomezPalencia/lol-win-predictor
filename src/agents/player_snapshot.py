@@ -16,30 +16,27 @@ Tests:    pytest tests/test_player_snapshot.py -v
 """
 import argparse
 
-import requests
-
 from src.riot_client import endpoints
 from src.storage import db
 
 
 def snapshot_players(conn, limit: int | None = None) -> int:
     """Snapshot players that don't have one yet (at most `limit`). Returns how many were saved."""
-    puuids = db.get_players_without_snapshot(conn)
+    all_puuids = db.get_players_without_snapshot(conn)
+    # Riot's firewall blocks every request about these players, so don't even ask.
+    puuids = [puuid for puuid in all_puuids if not endpoints.is_firewall_blocked(puuid)]
+    if len(puuids) < len(all_puuids):
+        print(f"Skipping {len(all_puuids) - len(puuids)} players blocked by Riot's firewall.")
     if limit is not None:
         puuids = puuids[:limit]
     saved = 0
     for i, puuid in enumerate(puuids, start=1):
-        try:
-            solo_entry = endpoints.get_solo_queue_entry(puuid)
-            masteries = []
-            for champion_id in db.get_champions_played(conn, puuid):
-                mastery = endpoints.get_champion_mastery(puuid, champion_id)
-                if mastery is not None:
-                    masteries.append(mastery)
-        except requests.HTTPError as error:
-            if endpoints.is_firewall_block(error):
-                continue  # Riot's firewall blocks this player's ID — nothing can be fetched for them
-            raise
+        solo_entry = endpoints.get_solo_queue_entry(puuid)
+        masteries = []
+        for champion_id in db.get_champions_played(conn, puuid):
+            mastery = endpoints.get_champion_mastery(puuid, champion_id)
+            if mastery is not None:
+                masteries.append(mastery)
         db.save_snapshot(conn, puuid, solo_entry, masteries)
         saved += 1
         if i % 50 == 0:

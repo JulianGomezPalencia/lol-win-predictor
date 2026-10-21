@@ -6,7 +6,7 @@ For every 'pending' target match:
   2. check it's a real, complete ranked game  -> otherwise mark it 'invalid'
   3. save the 10 participants and the match summary -> mark it 'fetched'
 
-Cost: 1 call per match -> ~950 matches x 1.2 s ≈ 19 minutes (the first time only).
+Cost: 1 call per match -> ~950 matches x 1.25 s ≈ 20 minutes (the first time only).
 Safe to stop with Ctrl+C and re-run: it only picks up matches that are still 'pending'.
 
 Run it:   python -m src.agents.match_fetcher
