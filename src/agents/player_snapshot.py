@@ -16,6 +16,8 @@ Tests:    pytest tests/test_player_snapshot.py -v
 """
 import argparse
 
+import requests
+
 from src.riot_client import endpoints
 from src.storage import db
 
@@ -25,17 +27,24 @@ def snapshot_players(conn, limit: int | None = None) -> int:
     puuids = db.get_players_without_snapshot(conn)
     if limit is not None:
         puuids = puuids[:limit]
+    saved = 0
     for i, puuid in enumerate(puuids, start=1):
-        solo_entry = endpoints.get_solo_queue_entry(puuid)
-        masteries = []
-        for champion_id in db.get_champions_played(conn, puuid):
-            mastery = endpoints.get_champion_mastery(puuid, champion_id)
-            if mastery is not None:
-                masteries.append(mastery)
+        try:
+            solo_entry = endpoints.get_solo_queue_entry(puuid)
+            masteries = []
+            for champion_id in db.get_champions_played(conn, puuid):
+                mastery = endpoints.get_champion_mastery(puuid, champion_id)
+                if mastery is not None:
+                    masteries.append(mastery)
+        except requests.HTTPError as error:
+            if endpoints.is_firewall_block(error):
+                continue  # Riot's firewall blocks this player's ID — nothing can be fetched for them
+            raise
         db.save_snapshot(conn, puuid, solo_entry, masteries)
+        saved += 1
         if i % 50 == 0:
             print(f"{i}/{len(puuids)} players")
-    return len(puuids)
+    return saved
 
 
 def main():

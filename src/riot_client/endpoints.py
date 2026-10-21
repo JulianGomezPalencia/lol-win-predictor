@@ -61,3 +61,16 @@ def is_not_found(error: requests.HTTPError) -> bool:
     """True if Riot answered 404. Only a 404 is safe to skip: a 403 means the key expired,
     and skipping that would silently save incomplete data."""
     return error.response is not None and error.response.status_code == 404
+
+
+def is_firewall_block(error: requests.HTTPError) -> bool:
+    """True if the request was stopped by Cloudflare (Riot's firewall), not by Riot itself.
+
+    Some PUUIDs contain "--", which the firewall mistakes for an SQL-injection attempt, so every
+    request about that player is blocked with an HTML 403. Riot's own 403 (an expired or invalid
+    key) is a JSON answer without the Cloudflare server header — that one must still stop the run.
+    """
+    response = error.response
+    if response is None or response.status_code != 403:
+        return False
+    return "cloudflare" in response.headers.get("server", "").lower()

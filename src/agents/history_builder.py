@@ -52,7 +52,12 @@ def summarize_for_player(match: dict, puuid: str) -> dict | None:
 def player_history(puuid: str, target_start_ts: int, depth: int = HISTORY_DEPTH) -> list[dict]:
     """The player's last `depth` ranked games before `target_start_ts` (milliseconds), newest first."""
     end_time = target_start_ts // 1000 - 1  # Riot wants seconds; -1 so the target match itself is excluded
-    match_ids = endpoints.get_match_ids(puuid, count=depth, end_time=end_time)
+    try:
+        match_ids = endpoints.get_match_ids(puuid, count=depth, end_time=end_time)
+    except requests.HTTPError as error:
+        if endpoints.is_firewall_block(error):
+            return []  # Riot's firewall blocks this player's ID: no history, like a brand-new account
+        raise
     rows = []
     for match_id in match_ids:
         try:
