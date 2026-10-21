@@ -50,4 +50,10 @@ Confirmed fixes were applied. These were judged real but not urgent:
 - **One process at a time** (documented in README): the 1.2 s spacing lives inside each process,
   so two agents running at once would exceed 100 requests / 2 minutes.
 
+- [x] **Riot's firewall blocks some players** (found 2026-10-21). Cloudflare, in front of the API,
+  answers an HTML 403 for any URL whose PUUID contains `--` (it looks like an SQL comment), and
+  URL-encoding the dashes doesn't help. 111 of 5,602 participants (2 %) are affected. Agents 4 and 5 now
+  skip those players (no history / no snapshot); a 403 from Riot itself still stops the run.
+  For the model: treat them like players with no previous games.
+
 ## Ideas

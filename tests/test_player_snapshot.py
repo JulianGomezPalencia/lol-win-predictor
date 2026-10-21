@@ -12,8 +12,9 @@ from src.storage import db
 
 
 class FakeHTTPResponse:
-    def __init__(self, status_code):
+    def __init__(self, status_code, server=""):
         self.status_code = status_code
+        self.headers = {"server": server} if server else {}
 
 
 def test_solo_queue_entry_picks_solo_queue(monkeypatch):
@@ -74,3 +75,21 @@ def test_snapshot_players(conn, monkeypatch):
     assert none["tier"] is None and none["lp"] is None, "unranked players are stored with NULL rank"
     assert conn.execute("SELECT COUNT(*) FROM champion_mastery").fetchone()[0] == 1
     assert player_snapshot.snapshot_players(conn) == 0, "already snapshotted players are skipped"
+
+
+def test_snapshot_skips_players_blocked_by_firewall(conn, monkeypatch):
+    def entry(puuid):
+        if puuid == "ranked":
+            raise requests.HTTPError("403", response=FakeHTTPResponse(403, server="cloudflare"))
+        return None
+    monkeypatch.setattr(endpoints, "get_solo_queue_entry", entry)
+    monkeypatch.setattr(endpoints, "get_champion_mastery", lambda puuid, champ: None)
+    assert player_snapshot.snapshot_players(conn) == 1, "the blocked player is skipped, the other saved"
+
+
+def test_is_firewall_block_only_for_cloudflare_403():
+    def err(status, server=""):
+        return requests.HTTPError(str(status), response=FakeHTTPResponse(status, server))
+    assert endpoints.is_firewall_block(err(403, "cloudflare"))
+    assert not endpoints.is_firewall_block(err(403))          # Riot's own 403: expired key
+    assert not endpoints.is_firewall_block(err(404, "cloudflare"))

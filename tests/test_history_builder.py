@@ -14,8 +14,9 @@ TARGET_START = 1_800_000_000_000  # ms
 
 
 class FakeHTTPResponse:
-    def __init__(self, status_code):
+    def __init__(self, status_code, server=""):
         self.status_code = status_code
+        self.headers = {"server": server} if server else {}
 
 
 def history_match(match_id, puuid, start_ts, win=True, duration=1800, champion_id=7):
@@ -130,5 +131,22 @@ def test_expired_key_stops_the_run_instead_of_saving_a_partial_history(fake_riot
     def expired_key(match_id):
         raise requests.HTTPError("403", response=FakeHTTPResponse(403))
     monkeypatch.setattr(endpoints, "get_match", expired_key)
+    with pytest.raises(requests.HTTPError):
+        history_builder.player_history("me", TARGET_START)
+
+
+def test_player_blocked_by_firewall_gets_empty_history(monkeypatch):
+    """Riot's firewall (Cloudflare) blocks PUUIDs containing "--": skip that player, keep going."""
+    def blocked(puuid, count=5, start_time=None, end_time=None):
+        raise requests.HTTPError("403", response=FakeHTTPResponse(403, server="cloudflare"))
+    monkeypatch.setattr(endpoints, "get_match_ids", blocked)
+    assert history_builder.player_history("abc--def", TARGET_START) == []
+
+
+def test_riot_403_on_match_ids_still_stops_the_run(monkeypatch):
+    """A 403 from Riot itself means the key is bad: stop, don't save an empty history."""
+    def expired(puuid, count=5, start_time=None, end_time=None):
+        raise requests.HTTPError("403", response=FakeHTTPResponse(403))
+    monkeypatch.setattr(endpoints, "get_match_ids", expired)
     with pytest.raises(requests.HTTPError):
         history_builder.player_history("me", TARGET_START)
