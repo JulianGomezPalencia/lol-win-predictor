@@ -8,7 +8,7 @@ Why only RECENT matches (last 14 days)? Some features (rank, champion mastery) c
 read as they are TODAY. For a match from last week, today's value is close to the truth.
 For a match from a year ago, it's not — that's the data leakage problem from the plan.
 
-Cost: 1 API call per player -> 400 players ≈ 400 x 1.2 s ≈ 8 minutes.
+Cost: 1 API call per player -> 400 players ≈ 400 x 1.25 s ≈ 8 minutes.
 Safe to re-run: duplicates are ignored by add_target_match().
 
 Run it:   python -m src.agents.match_discovery

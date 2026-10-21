@@ -47,13 +47,22 @@ Confirmed fixes were applied. These were judged real but not urgent:
   the existing database, so it needs an `ALTER TABLE target_matches ADD COLUMN invalid_reason TEXT`.
 - [ ] **More tests:** `save_history` rolling back when an insert fails; a history test with all
   10 participants instead of 1.
-- **One process at a time** (documented in README): the 1.2 s spacing lives inside each process,
+- **One process at a time** (documented in README): the 1.25 s spacing lives inside each process,
   so two agents running at once would exceed 100 requests / 2 minutes.
 
 - [x] **Riot's firewall blocks some players** (found 2026-10-21). Cloudflare, in front of the API,
   answers an HTML 403 for any URL whose PUUID contains `--` (it looks like an SQL comment), and
   URL-encoding the dashes doesn't help. 111 of 5,602 participants (2 %) are affected. Agents 4 and 5 now
-  skip those players (no history / no snapshot); a 403 from Riot itself still stops the run.
-  For the model: treat them like players with no previous games.
+  skip those players before asking (`endpoints.is_firewall_blocked(puuid)`), and print how many
+  were skipped. Any other 403 — Riot's own, or the firewall blocking us for another reason —
+  still stops the run, so empty histories are never saved by mistake.
+  For the model: their history is unknown (not "no games"); add an `is_history_missing` flag.
+
+- [x] **History run crashed on network drops** (found 2026-10-21). `Gave up on .../matches/LA1_...
+  after 3 attempts`: the connection was being reset (`Connection reset by peer`), and 3 attempts
+  only covered ~3 seconds. `get()` now keeps retrying network errors, 5xx and 429 for up to
+  30 minutes (`MAX_OUTAGE_SECONDS`, waits 1, 2, 4 … 60 s), also retries answers cut off or damaged
+  in transit, and reads a missing/odd Retry-After safely. If it still fails it raises
+  `RiotUnavailableError`, and `run_pipeline` stops with a clear message: just run it again.
 
 ## Ideas

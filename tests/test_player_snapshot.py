@@ -12,9 +12,8 @@ from src.storage import db
 
 
 class FakeHTTPResponse:
-    def __init__(self, status_code, server=""):
+    def __init__(self, status_code):
         self.status_code = status_code
-        self.headers = {"server": server} if server else {}
 
 
 def test_solo_queue_entry_picks_solo_queue(monkeypatch):
@@ -77,19 +76,24 @@ def test_snapshot_players(conn, monkeypatch):
     assert player_snapshot.snapshot_players(conn) == 0, "already snapshotted players are skipped"
 
 
-def test_snapshot_skips_players_blocked_by_firewall(conn, monkeypatch):
-    def entry(puuid):
-        if puuid == "ranked":
-            raise requests.HTTPError("403", response=FakeHTTPResponse(403, server="cloudflare"))
-        return None
-    monkeypatch.setattr(endpoints, "get_solo_queue_entry", entry)
+def test_snapshot_skips_players_blocked_by_firewall(tmp_path, monkeypatch):
+    connection = db.connect(tmp_path / "t.sqlite")
+    db.add_target_match(connection, "LA1_T", "seed", "GOLD")
+    db.save_fetched_match(
+        connection, "LA1_T", {"game_start_ts": 1, "patch": "16.8", "blue_win": 1},
+        [{"puuid": "ok", "team_id": 100, "team_position": "TOP", "champion_id": 7,
+          "champion_name": "Leblanc", "win": 1},
+         {"puuid": "bad--id", "team_id": 200, "team_position": "TOP", "champion_id": 8,
+          "champion_name": "Vladimir", "win": 0}],
+    )
+    asked = []
+    monkeypatch.setattr(endpoints, "get_solo_queue_entry", lambda puuid: asked.append(puuid))
     monkeypatch.setattr(endpoints, "get_champion_mastery", lambda puuid, champ: None)
-    assert player_snapshot.snapshot_players(conn) == 1, "the blocked player is skipped, the other saved"
+    assert player_snapshot.snapshot_players(connection) == 1
+    assert asked == ["ok"], "the blocked player is never requested"
+    connection.close()
 
 
-def test_is_firewall_block_only_for_cloudflare_403():
-    def err(status, server=""):
-        return requests.HTTPError(str(status), response=FakeHTTPResponse(status, server))
-    assert endpoints.is_firewall_block(err(403, "cloudflare"))
-    assert not endpoints.is_firewall_block(err(403))          # Riot's own 403: expired key
-    assert not endpoints.is_firewall_block(err(404, "cloudflare"))
+def test_is_firewall_blocked_only_for_double_dash():
+    assert endpoints.is_firewall_blocked("abc--def")
+    assert not endpoints.is_firewall_blocked("abc-def")

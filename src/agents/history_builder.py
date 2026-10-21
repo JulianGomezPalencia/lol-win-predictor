@@ -51,13 +51,10 @@ def summarize_for_player(match: dict, puuid: str) -> dict | None:
 
 def player_history(puuid: str, target_start_ts: int, depth: int = HISTORY_DEPTH) -> list[dict]:
     """The player's last `depth` ranked games before `target_start_ts` (milliseconds), newest first."""
+    if endpoints.is_firewall_blocked(puuid):
+        return []  # Riot's firewall blocks this player's ID: no history, like a brand-new account
     end_time = target_start_ts // 1000 - 1  # Riot wants seconds; -1 so the target match itself is excluded
-    try:
-        match_ids = endpoints.get_match_ids(puuid, count=depth, end_time=end_time)
-    except requests.HTTPError as error:
-        if endpoints.is_firewall_block(error):
-            return []  # Riot's firewall blocks this player's ID: no history, like a brand-new account
-        raise
+    match_ids = endpoints.get_match_ids(puuid, count=depth, end_time=end_time)
     rows = []
     for match_id in match_ids:
         try:
@@ -80,10 +77,15 @@ def build_histories(conn, limit: int | None = None, depth: int = HISTORY_DEPTH) 
         matches = matches[:limit]
     for i, target in enumerate(matches, start=1):
         rows = []
+        blocked = 0
         for participant in db.get_participants(conn, target["match_id"]):
+            if endpoints.is_firewall_blocked(participant["puuid"]):
+                blocked += 1
+                continue
             rows.extend(player_history(participant["puuid"], target["game_start_ts"], depth))
         db.save_history(conn, target["match_id"], rows)
-        print(f"{i}/{len(matches)} {target['match_id']}: {len(rows)} history games")
+        skipped = f" ({blocked} players skipped: blocked by Riot's firewall)" if blocked else ""
+        print(f"{i}/{len(matches)} {target['match_id']}: {len(rows)} history games{skipped}")
     return len(matches)
 
 
