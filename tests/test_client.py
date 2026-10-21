@@ -81,7 +81,7 @@ def test_does_not_retry_on_404(fake_api):
 
 def test_gives_up_after_max_retries(fake_api):
     fake_api["responses"] = [FakeResponse(500)] * client.MAX_RETRIES
-    with pytest.raises(RuntimeError):
+    with pytest.raises(client.RiotUnavailableError, match="500 server error"):
         client.get("https://example")
     assert fake_api["calls"] == client.MAX_RETRIES
 
@@ -113,3 +113,22 @@ def test_retries_after_network_error(fake_api):
     fake_api["responses"] = [requests.ConnectionError("wifi dropped"), FakeResponse(200, {"ok": True})]
     assert client.get("https://example") == {"ok": True}
     assert fake_api["calls"] == 2
+
+
+def test_retries_when_connection_drops_mid_answer(fake_api):
+    fake_api["responses"] = [requests.exceptions.ChunkedEncodingError("reset"), FakeResponse(200, {"ok": True})]
+    assert client.get("https://example") == {"ok": True}
+
+
+def test_gives_up_on_network_errors_and_says_why(fake_api):
+    fake_api["responses"] = [requests.ConnectionError("Connection reset by peer")] * client.MAX_RETRIES
+    with pytest.raises(client.RiotUnavailableError, match="Connection reset by peer"):
+        client.get("https://example")
+
+
+def test_backoff_grows_but_is_capped(fake_api, monkeypatch):
+    monkeypatch.setattr(client, "_wait_for_rate_limit", lambda: None)  # only count backoff sleeps
+    fake_api["responses"] = [FakeResponse(503)] * client.MAX_RETRIES
+    with pytest.raises(client.RiotUnavailableError):
+        client.get("https://example")
+    assert fake_api["sleeps"] == [1, 2, 4, 8, 16, 32, client.MAX_BACKOFF_SECONDS]
