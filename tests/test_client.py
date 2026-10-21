@@ -33,19 +33,26 @@ class FakeResponse:
 def fake_api(monkeypatch):
     """Replaces requests.get with a fake that returns pre-programmed responses in order.
 
-    Also replaces time.sleep so tests don't actually wait, and records every sleep.
+    Once the list runs out, the last response repeats (handy for "Riot is down for good").
+    Also replaces the clock: time.sleep doesn't actually wait, it records the sleep and moves
+    a fake clock forward, so get() "sees" the time pass and its outage limit can be tested.
     """
-    state = {"responses": [], "calls": 0, "sleeps": []}
+    state = {"responses": [], "calls": 0, "sleeps": [], "now": 1000.0}
 
     def fake_get(url, **kwargs):
-        response = state["responses"][state["calls"]]
+        response = state["responses"][min(state["calls"], len(state["responses"]) - 1)]
         state["calls"] += 1
         if isinstance(response, Exception):
             raise response
         return response
 
+    def fake_sleep(seconds):
+        state["sleeps"].append(seconds)
+        state["now"] += seconds
+
     monkeypatch.setattr(client.requests, "get", fake_get)
-    monkeypatch.setattr(client.time, "sleep", lambda seconds: state["sleeps"].append(seconds))
+    monkeypatch.setattr(client.time, "sleep", fake_sleep)
+    monkeypatch.setattr(client.time, "monotonic", lambda: state["now"])
     monkeypatch.setattr(client, "_last_call_time", 0.0)
     return state
 
@@ -79,11 +86,13 @@ def test_does_not_retry_on_404(fake_api):
     assert fake_api["calls"] == 1, "a 404 won't fix itself — don't waste requests retrying"
 
 
-def test_gives_up_after_max_retries(fake_api):
-    fake_api["responses"] = [FakeResponse(500)] * client.MAX_RETRIES
-    with pytest.raises(RuntimeError):
+def test_gives_up_when_the_outage_lasts_too_long(fake_api):
+    fake_api["responses"] = [FakeResponse(500)]  # Riot answers 500 forever
+    with pytest.raises(client.RiotUnavailableError, match="500 server error"):
         client.get("https://example")
-    assert fake_api["calls"] == client.MAX_RETRIES
+    assert sum(fake_api["sleeps"]) <= client.MAX_OUTAGE_SECONDS, "never waits past the limit"
+    assert sum(fake_api["sleeps"]) > client.MAX_OUTAGE_SECONDS - client.MAX_BACKOFF_SECONDS - 5, \
+        "keeps trying for (almost) the whole limit before giving up"
 
 
 def test_rate_limiter_spaces_out_calls(fake_api, monkeypatch):
@@ -101,15 +110,52 @@ def test_rate_limiter_does_not_sleep_when_enough_time_passed(fake_api, monkeypat
     assert fake_api["sleeps"] == []
 
 
-def test_no_pointless_sleep_after_the_last_attempt(fake_api, monkeypatch):
-    monkeypatch.setattr(client, "_wait_for_rate_limit", lambda: None)  # only count backoff sleeps
-    fake_api["responses"] = [FakeResponse(500)] * client.MAX_RETRIES
-    with pytest.raises(RuntimeError):
-        client.get("https://example")
-    assert len(fake_api["sleeps"]) == client.MAX_RETRIES - 1, "giving up right away — no wait before it"
-
-
 def test_retries_after_network_error(fake_api):
     fake_api["responses"] = [requests.ConnectionError("wifi dropped"), FakeResponse(200, {"ok": True})]
     assert client.get("https://example") == {"ok": True}
     assert fake_api["calls"] == 2
+
+
+def test_retries_when_connection_drops_mid_answer(fake_api):
+    fake_api["responses"] = [requests.exceptions.ChunkedEncodingError("reset"), FakeResponse(200, {"ok": True})]
+    assert client.get("https://example") == {"ok": True}
+
+
+def test_retries_when_the_answer_arrives_damaged(fake_api):
+    fake_api["responses"] = [requests.exceptions.ContentDecodingError("bad gzip"), FakeResponse(200, {"ok": True})]
+    assert client.get("https://example") == {"ok": True}
+
+
+def test_gives_up_on_network_errors_and_says_why(fake_api):
+    fake_api["responses"] = [requests.ConnectionError("Connection reset by peer")]
+    with pytest.raises(client.RiotUnavailableError, match="Connection reset by peer"):
+        client.get("https://example")
+
+
+def test_backoff_grows_but_is_capped(fake_api, monkeypatch):
+    monkeypatch.setattr(client, "_wait_for_rate_limit", lambda: None)  # only count backoff sleeps
+    fake_api["responses"] = [FakeResponse(503)]
+    with pytest.raises(client.RiotUnavailableError):
+        client.get("https://example")
+    assert fake_api["sleeps"][:8] == [1, 2, 4, 8, 16, 32, 60, 60]
+
+
+def test_429_without_retry_after_backs_off(fake_api, monkeypatch):
+    """A 429 from Riot's service (not its rate limiter) may come without Retry-After."""
+    monkeypatch.setattr(client, "_wait_for_rate_limit", lambda: None)
+    fake_api["responses"] = [FakeResponse(429)] * 3 + [FakeResponse(200, {"ok": True})]
+    assert client.get("https://example") == {"ok": True}
+    assert fake_api["sleeps"] == [1, 2, 4]
+
+
+def test_429_with_unreadable_retry_after_does_not_crash(fake_api, monkeypatch):
+    monkeypatch.setattr(client, "_wait_for_rate_limit", lambda: None)
+    fake_api["responses"] = [FakeResponse(429, headers={"Retry-After": "soon"}), FakeResponse(200, {"ok": True})]
+    assert client.get("https://example") == {"ok": True}
+    assert fake_api["sleeps"] == [1]
+
+
+def test_429_forever_gives_up(fake_api):
+    fake_api["responses"] = [FakeResponse(429, headers={"Retry-After": "10"})]
+    with pytest.raises(client.RiotUnavailableError, match="429"):
+        client.get("https://example")

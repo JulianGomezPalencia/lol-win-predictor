@@ -22,9 +22,14 @@ from src.storage import db
 
 def snapshot_players(conn, limit: int | None = None) -> int:
     """Snapshot players that don't have one yet (at most `limit`). Returns how many were saved."""
-    puuids = db.get_players_without_snapshot(conn)
+    all_puuids = db.get_players_without_snapshot(conn)
+    # Riot's firewall blocks every request about these players, so don't even ask.
+    puuids = [puuid for puuid in all_puuids if not endpoints.is_firewall_blocked(puuid)]
+    if len(puuids) < len(all_puuids):
+        print(f"Skipping {len(all_puuids) - len(puuids)} players blocked by Riot's firewall.")
     if limit is not None:
         puuids = puuids[:limit]
+    saved = 0
     for i, puuid in enumerate(puuids, start=1):
         solo_entry = endpoints.get_solo_queue_entry(puuid)
         masteries = []
@@ -33,9 +38,10 @@ def snapshot_players(conn, limit: int | None = None) -> int:
             if mastery is not None:
                 masteries.append(mastery)
         db.save_snapshot(conn, puuid, solo_entry, masteries)
+        saved += 1
         if i % 50 == 0:
             print(f"{i}/{len(puuids)} players")
-    return len(puuids)
+    return saved
 
 
 def main():

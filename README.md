@@ -43,7 +43,7 @@ would go over Riot's limit (100 requests / 2 minutes).
 
 | Folder | What goes there |
 |---|---|
-| `src/riot_client/` | The only code that talks to the Riot API: rate limiting, retries, match cache |
+| `src/riot_client/` | The only code that talks to the Riot API: rate limiting, retries (up to 30 min of outage), match cache |
 | `src/storage/` | SQLite database: `schema.sql` (tables) and `db.py` (queries) |
 | `src/agents/` | The five data-collection agents |
 | `scripts/` | Runnable scripts: `run_pipeline.py`, `hello_riot.py` |
