@@ -20,8 +20,10 @@ Steps, in order:
   snapshot  Agent 5  rank + champion mastery of participants (~2 calls per player)
 """
 import argparse
+import sys
 
 from src.agents import history_builder, match_discovery, match_fetcher, player_snapshot, seeder
+from src.riot_client.client import RiotUnavailableError
 from src.storage import db
 
 STEPS = ["seed", "discover", "fetch", "history", "snapshot"]
@@ -57,6 +59,13 @@ def main():
             elif step == "snapshot":
                 print(f"{player_snapshot.snapshot_players(conn, limit=args.limit)} players snapshotted.")
         print("\nQueue:", db.count_target_matches_by_status(conn))
+    except RiotUnavailableError as error:
+        # Every finished match is already saved, so nothing is lost: just run the same command again.
+        print(f"\nStopped: {error}")
+        print("Riot or your internet connection kept failing. Progress so far is saved;")
+        print("check your connection and run the same command again to continue.")
+        print("Queue:", db.count_target_matches_by_status(conn))
+        sys.exit(1)
     finally:
         conn.close()
 

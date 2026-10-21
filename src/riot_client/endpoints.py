@@ -61,3 +61,15 @@ def is_not_found(error: requests.HTTPError) -> bool:
     """True if Riot answered 404. Only a 404 is safe to skip: a 403 means the key expired,
     and skipping that would silently save incomplete data."""
     return error.response is not None and error.response.status_code == 404
+
+
+def is_firewall_blocked(puuid: str) -> bool:
+    """True if Riot's firewall blocks every request about this player.
+
+    Cloudflare, in front of the API, mistakes "--" in a URL for an SQL-injection attempt and
+    answers an HTML 403, whatever we do (URL-encoding the dashes doesn't help). So players whose
+    PUUID contains "--" are skipped BEFORE asking. We check the PUUID instead of reacting to the
+    403 on purpose: any other 403 (an expired key, or the firewall blocking us for another
+    reason) must stop the run, not be mistaken for "this player has no games".
+    """
+    return "--" in puuid

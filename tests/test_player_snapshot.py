@@ -74,3 +74,26 @@ def test_snapshot_players(conn, monkeypatch):
     assert none["tier"] is None and none["lp"] is None, "unranked players are stored with NULL rank"
     assert conn.execute("SELECT COUNT(*) FROM champion_mastery").fetchone()[0] == 1
     assert player_snapshot.snapshot_players(conn) == 0, "already snapshotted players are skipped"
+
+
+def test_snapshot_skips_players_blocked_by_firewall(tmp_path, monkeypatch):
+    connection = db.connect(tmp_path / "t.sqlite")
+    db.add_target_match(connection, "LA1_T", "seed", "GOLD")
+    db.save_fetched_match(
+        connection, "LA1_T", {"game_start_ts": 1, "patch": "16.8", "blue_win": 1},
+        [{"puuid": "ok", "team_id": 100, "team_position": "TOP", "champion_id": 7,
+          "champion_name": "Leblanc", "win": 1},
+         {"puuid": "bad--id", "team_id": 200, "team_position": "TOP", "champion_id": 8,
+          "champion_name": "Vladimir", "win": 0}],
+    )
+    asked = []
+    monkeypatch.setattr(endpoints, "get_solo_queue_entry", lambda puuid: asked.append(puuid))
+    monkeypatch.setattr(endpoints, "get_champion_mastery", lambda puuid, champ: None)
+    assert player_snapshot.snapshot_players(connection) == 1
+    assert asked == ["ok"], "the blocked player is never requested"
+    connection.close()
+
+
+def test_is_firewall_blocked_only_for_double_dash():
+    assert endpoints.is_firewall_blocked("abc--def")
+    assert not endpoints.is_firewall_blocked("abc-def")
