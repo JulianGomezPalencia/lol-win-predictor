@@ -8,6 +8,10 @@ Two levels:
   player_features()  one row per (match, player): recent form, lane fit, champion comfort...
   match_features()   one row per match: blue minus red, as a team and lane against lane
 
+The prediction is meant to be made after champion select: the champion each player picked and
+their position in the match are treated as known. (Riot fills in teamPosition after the game from
+what the player did; in practice it matches the role from champion select almost always.)
+
 Lane against lane is the new idea after the EDA: on their own, absolute numbers (a 60 % win rate)
 said nothing about who wins, so we compare each player with the opponent in the same position.
 
@@ -46,18 +50,20 @@ def racha_actual(wins: list[int]) -> int:
 
 
 def _usual_position(positions: pd.Series) -> str | float:
-    """The position the player repeats most (ties -> alphabetical, to stay deterministic)."""
+    """The position the player repeats most. Games come newest first, so a tie goes to the
+    position among the tied ones that the player played most recently."""
     known = positions[positions.fillna("") != ""]
     if known.empty:
         return np.nan
-    return known.mode().iat[0]
+    return known.value_counts(sort=False).idxmax()  # sort=False keeps first-seen (newest) order
 
 
 def player_features(history: pd.DataFrame, participants: pd.DataFrame, matches: pd.DataFrame) -> pd.DataFrame:
     """One row per participant of each match that has its history, with the pre-game variables.
 
-    Remakes in the history are ignored. A player without usable history (brand-new, or blocked by
-    Riot's firewall) keeps NaN in the variables and gets sin_historial = 1.
+    Remakes in the history are ignored. A player without usable history (brand-new, only remakes,
+    or blocked by Riot's firewall: the export can't tell these apart, ~1 % of players) keeps NaN in
+    the variables and gets sin_historial = 1. Such a player is not counted as off-role.
     """
     done = matches[matches["status"] == "history_done"]
     target_start = done.set_index("match_id")["game_start_ts"]

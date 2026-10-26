@@ -68,7 +68,29 @@ def test_run_learns_a_real_signal_and_handles_missing_values():
     assert set(result["features"]) == {"dif_kda_medio", "dif_winrate_10", "top_dif_winrate_10"}
 
 
-def test_temporal_validation_uses_only_older_matches_and_finds_the_signal():
-    table = train.temporal_validation(synthetic_table(n=300))
+def test_temporal_validation_finds_the_signal_and_reports_auc_per_round():
+    result = train.temporal_validation(synthetic_table(n=300))
+    table = result["tabla"]
     assert set(table.index) == {"Siempre la clase mayoritaria", "Regresión logística", "Bosque aleatorio"}
     assert table.loc["Regresión logística", "accuracy"] > 0.75
+    assert np.isnan(table.loc["Siempre la clase mayoritaria", "roc_auc"]), "a constant has no AUC"
+    assert len(result["auc_por_corte"]) == 5
+    assert result["auc_por_corte"]["Siempre la clase mayoritaria"].isna().all()
+    assert (result["auc_por_corte"]["Regresión logística"] > 0.7).all()
+
+
+def test_auc_interval_contains_the_auc():
+    y = np.array([0, 1] * 50)
+    proba = np.where(y == 1, 0.6, 0.4) + np.random.default_rng(1).normal(scale=0.2, size=100)
+    low, high = train.bootstrap_auc_ci(y, proba)
+    m = train.evaluate(pd.Series(y), proba)
+    assert low <= m["roc_auc"] <= high
+
+
+def test_paired_difference_counts_only_disagreements():
+    y = np.array([1, 1, 0, 0])
+    model = np.array([0.9, 0.9, 0.1, 0.9])      # 3 right
+    baseline = np.array([0.1, 0.1, 0.1, 0.1])  # 2 right
+    result = train.paired_accuracy_difference(y, model, baseline)
+    assert result["diferencia"] == pytest.approx(0.25)
+    assert result["ic95"][0] <= 0.25 <= result["ic95"][1]
