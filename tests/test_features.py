@@ -126,3 +126,10 @@ def test_feature_columns_are_only_differences():
     cols = build.feature_columns(table)
     assert "blue_win" not in cols and "game_start_ts" not in cols and "seed_tier" not in cols
     assert "dif_winrate_10" in cols and "utility_dif_kda_medio" in cols
+
+
+def test_usual_lane_tie_goes_to_the_most_recent_lane():
+    # Newest first: UTILITY, TOP, UTILITY, TOP -> tie 2-2, UTILITY was played most recently.
+    assert build._usual_position(pd.Series(["UTILITY", "TOP", "UTILITY", "TOP"])) == "UTILITY"
+    assert build._usual_position(pd.Series(["TOP", "", "UTILITY", "UTILITY"])) == "UTILITY"
+    assert math.isnan(build._usual_position(pd.Series(["", None])))
