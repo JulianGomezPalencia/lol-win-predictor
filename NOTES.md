@@ -65,4 +65,27 @@ Confirmed fixes were applied. These were judged real but not urgent:
   in transit, and reads a missing/odd Retry-After safely. If it still fails it raises
   `RiotUnavailableError`, and `run_pipeline` stops with a clear message: just run it again.
 
+## First model results (2026-10-26)
+
+920 matches, 29 blue-minus-red features (team averages + lane against lane). Chronological split
+736 train / 184 test; the test set covers less than a day (2026-10-09 23:13 to 2026-10-10 16:34).
+
+| | Test accuracy (95 % CI) | Walk-forward accuracy, 765 preds | ROC AUC (walk-forward) |
+|---|---|---|---|
+| Always majority class | 53.3 % (46–60) | 51.6 % | — |
+| Logistic regression (C=0.01) | 54.9 % (48–62) | 54.1 % | 0.56 |
+| Random forest (depth 6) | 52.7 % (46–60) | 52.8 % | 0.56 |
+
+- Weak but real signal: walk-forward AUC 0.56 with ~0.02 standard error. On the 184-match test
+  alone it can't be told apart from the baseline.
+- Strongest variables: team KDA difference (r = 0.11), support-vs-support KDA, days since the last
+  game (longer break -> slightly fewer wins). Some coefficients have the "wrong" sign (support win
+  rate, mid in usual lane): noise.
+- The random forest doesn't beat the logistic regression: too little data to find interactions.
+
 ## Ideas
+
+- [ ] **More data.** The matches cover two weeks only. Re-running `--steps discover` later adds
+  newer matches (and a longer test period); the history step is the slow part (~110 calls/match).
+- [ ] **Rank at match time.** Riot has no historical rank endpoint. A proxy could be the average
+  rank of the seed player's league, or LP gained/lost in the history games (not in match-v5).

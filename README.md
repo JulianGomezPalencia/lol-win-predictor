@@ -39,6 +39,14 @@ would go over Riot's limit (100 requests / 2 minutes).
 | 4 | `history_builder` | Each player's last 10 ranked games **before** the match (no future leakage) | `player_history`, status `history_done` |
 | 5 | `player_snapshot` | Today's rank + champion mastery of each participant (NULL rank if unranked) | `player_snapshots`, `champion_mastery` |
 
+## Training the model
+
+    python -m scripts.export_dataset   # database -> data/export/*.csv (anonymized player IDs)
+    python -m src.features.build       # -> data/features/partidas.csv, one row per match
+    python -m src.models.train         # baselines, logistic regression, random forest + metrics
+
+`notebooks/entrega3_modelo.ipynb` runs the same steps with charts (and in Google Colab).
+
 ## Project layout
 
 | Folder | What goes there |
@@ -46,6 +54,8 @@ would go over Riot's limit (100 requests / 2 minutes).
 | `src/riot_client/` | The only code that talks to the Riot API: rate limiting, retries (up to 30 min of outage), match cache |
 | `src/storage/` | SQLite database: `schema.sql` (tables) and `db.py` (queries) |
 | `src/agents/` | The five data-collection agents |
+| `src/features/` | Pre-game variables per player and per match (blue minus red, lane against lane) |
+| `src/models/` | Chronological split, baselines, models and metrics |
 | `scripts/` | Runnable scripts: `run_pipeline.py`, `hello_riot.py` |
 | `tests/` | Automated tests (no real API calls) |
 | `data/` | Downloaded matches and the database (not in git) |
@@ -56,9 +66,9 @@ would go over Riot's limit (100 requests / 2 minutes).
 - [x] Exercise 1: first API calls (`scripts/hello_riot.py`)
 - [x] Shared Riot client with rate limiting and caching
 - [x] Database + data collection agents
-- [ ] Full data collection run (history step takes the longest)
-- [ ] Feature engineering
-- [ ] Model training
+- [x] Full data collection run: 920 matches with the history of all 10 players
+- [x] Feature engineering
+- [x] Model training (first version: weak signal, see NOTES.md)
 
 ---
 This project isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone
