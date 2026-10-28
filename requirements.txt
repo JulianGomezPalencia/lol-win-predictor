@@ -3,6 +3,7 @@ python-dotenv>=1.0   # load the API key from .env
 pytest>=8.0          # run tests
 pandas>=2.2          # EDA notebook: tables
 matplotlib>=3.9      # EDA notebook: charts
+scikit-learn>=1.5    # models: logistic regression, random forest, metrics
 nbformat>=5.10       # run the notebook from the terminal (optional)
 nbclient>=0.10
 ipykernel>=6.29

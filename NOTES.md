@@ -65,4 +65,31 @@ Confirmed fixes were applied. These were judged real but not urgent:
   in transit, and reads a missing/odd Retry-After safely. If it still fails it raises
   `RiotUnavailableError`, and `run_pipeline` stops with a clear message: just run it again.
 
+## First model results (2026-10-26)
+
+920 matches, 29 blue-minus-red features (team averages + lane against lane). Chronological split
+736 train / 184 test; the test set covers less than a day (2026-10-09 23:13 to 2026-10-10 16:34).
+
+| | Test accuracy (95 % CI) | Walk-forward accuracy, 765 preds | Walk-forward ROC AUC (95 % CI) |
+|---|---|---|---|
+| Always majority class | 53.3 % (46–60) | 51.6 % | — |
+| Logistic regression (C=0.01) | 56.0 % (49–63) | 54.6 % | 0.571 (0.532–0.611) |
+| Random forest (depth 6) | 52.2 % (45–60) | 53.2 % | 0.559 (0.518–0.597) |
+
+- Weak but real ranking signal: walk-forward AUC 0.571, above 0.5 in 4 of 5 rounds (0.501 in the 4th).
+- It does NOT turn into better predictions: logistic minus baseline accuracy, paired on the same
+  matches, is +3.0 pp (95 % CI −1.3 to +7.1); log loss and Brier equal a constant prediction.
+- The walk-forward's last round overlaps the final test set: more precise, not independent.
+- Strongest variables: days since the last game (longer break -> slightly fewer wins), team KDA
+  difference, support-vs-support KDA. Some coefficients have the "wrong" sign (support win rate): noise.
+- The random forest doesn't beat the logistic regression: too little data to find interactions.
+- Review (2026-10-26) items left as documented choices: tier weights only in the fit (weighted
+  scoring picks the same hyperparameters); sin_historial can't tell firewall-blocked players from new
+  ones (~1 %); prediction assumes champion select is over (champion and position known).
+
 ## Ideas
+
+- [ ] **More data.** The matches cover two weeks only. Re-running `--steps discover` later adds
+  newer matches (and a longer test period); the history step is the slow part (~110 calls/match).
+- [ ] **Rank at match time.** Riot has no historical rank endpoint. A proxy could be the average
+  rank of the seed player's league, or LP gained/lost in the history games (not in match-v5).
