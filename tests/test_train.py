@@ -118,3 +118,37 @@ def test_position_sensitivity_shows_when_the_signal_lives_in_position():
     assert aucs["Con todas las variables"] > 0.8
     assert aucs["Sin variables de posición"] < 0.65
     assert result["diferencia_auc"]["ic95"][0] > 0
+
+
+def test_temporal_validation_returns_aligned_seed_tier():
+    table = synthetic_table()
+    result = train.temporal_validation(table, n_splits=3)
+    n = len(result["y"])
+    assert len(result["seed_tier"]) == n == len(result["probabilidades"]["Regresión logística"])
+    # the tiers must follow the same matches as y: check against the sorted table's tail
+    ordered = table.sort_values("game_start_ts", kind="stable").reset_index(drop=True)
+    assert result["seed_tier"].tolist() == ordered["seed_tier"].iloc[-n:].tolist()
+    assert result["y"].tolist() == ordered["blue_win"].iloc[-n:].tolist()
+
+
+def test_metrics_by_tier_band_counts_and_nan_for_one_class_band():
+    rng = np.random.default_rng(1)
+    tiers = ["GOLD"] * 60 + ["DIAMOND"] * 40 + ["MASTER"] * 50 + ["CHALLENGER"] * 10
+    y = np.r_[rng.integers(0, 2, 60), np.ones(40, dtype=int), rng.integers(0, 2, 60)]
+    proba = np.clip(y * 0.3 + rng.random(len(y)) * 0.5, 0, 1)
+    table = train.metrics_by_tier_band(y, proba, tiers)
+    assert table["partidas"].to_dict() == {"Hierro a Platino": 60, "Esmeralda y Diamante": 40, "Maestro o superior": 60}
+    assert np.isnan(table.loc["Esmeralda y Diamante", "roc_auc"])  # one class only
+    assert not np.isnan(table.loc["Esmeralda y Diamante", "accuracy"])
+    assert 0.5 < table.loc["Hierro a Platino", "roc_auc"] <= 1.0
+
+
+def test_metrics_by_tier_band_empty_band_is_nan():
+    table = train.metrics_by_tier_band([0, 1, 0, 1], [0.2, 0.8, 0.3, 0.6], ["GOLD"] * 4)
+    assert table.loc["Maestro o superior", "partidas"] == 0
+    assert np.isnan(table.loc["Maestro o superior", "accuracy"])
+
+
+def test_metrics_by_tier_band_unknown_tier_raises():
+    with pytest.raises(ValueError, match="UNRANKED"):
+        train.metrics_by_tier_band([0, 1], [0.2, 0.8], ["GOLD", "UNRANKED"])

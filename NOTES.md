@@ -104,6 +104,24 @@ The paired AUC difference is +0.022 (95 % CI −0.004 to +0.051): not distinguis
 leak can't be ruled out either. Quote 0.549 as the cautious estimate. The remaining lane-against-lane
 variables still use `team_position` to pair opponents.
 
+## Per-tier check (2026-11-04)
+
+51 % of the matches come from Master or above, so we checked whether the signal holds lower down.
+`train.metrics_by_tier_band` splits the walk-forward predictions (logistic regression, all 29
+variables) by `seed_tier`, the tier of the player through whom the match was found, NOT of all ten:
+
+| Band | Matches | Accuracy (95 % CI) | ROC AUC (95 % CI) |
+|---|---|---|---|
+| Hierro a Platino | 225 | 53.3 % (47.1–60.0) | 0.586 (0.512–0.662) |
+| Esmeralda y Diamante | 136 | 54.4 % (45.6–62.5) | 0.550 (0.452–0.651) |
+| Maestro o superior | 404 | 55.4 % (50.5–60.4) | 0.570 (0.515–0.625) |
+
+The intervals overlap heavily: the data cannot separate the bands, so we claim no difference.
+
+The final model (`python -m src.models.predict --train`, saved in `data/models/`) uses the 22
+variables without position; temporal ROC AUC 0.549 (0.507–0.588). It scores played matches only:
+live prediction is not built (the spectator endpoint gives no positions).
+
 ## Ideas
 
 - [ ] **More data.** The matches cover two weeks only. Re-running `--steps discover` later adds

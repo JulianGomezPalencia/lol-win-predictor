@@ -178,7 +178,8 @@ def temporal_validation(table: pd.DataFrame, n_splits: int = 5) -> dict:
     precise estimate, not an independent confirmation of it.
 
     Returns the pooled metrics table, the ROC AUC of each round (the majority baseline predicts one
-    constant per round, so it has none), and the pooled answers and probabilities.
+    constant per round, so it has none), the pooled answers and probabilities, and the pooled
+    seed_tier of each prediction (aligned with "y" and "probabilidades").
     """
     ordered = table.sort_values("game_start_ts", kind="stable").reset_index(drop=True)
     features = feature_columns(ordered)
@@ -186,11 +187,12 @@ def temporal_validation(table: pd.DataFrame, n_splits: int = 5) -> dict:
     names = ["Siempre la clase mayoritaria", "Regresión logística", "Bosque aleatorio"]
     collected = {name: [] for name in names}
     auc_per_round = {name: [] for name in names}
-    answers = []
+    answers, tiers = [], []
     for train_idx, test_idx in TimeSeriesSplit(n_splits=n_splits).split(X):
         X_tr, y_tr, y_te = X.iloc[train_idx], y.iloc[train_idx], y.iloc[test_idx]
         weights = tier_weights(ordered["seed_tier"].iloc[train_idx])
         answers.append(y_te.to_numpy())
+        tiers.append(ordered["seed_tier"].iloc[test_idx].to_numpy())
         predictions = {"Siempre la clase mayoritaria": baseline_majority(y_tr, len(test_idx))}
         for name, search in (("Regresión logística", logistic_model()), ("Bosque aleatorio", forest_model())):
             search.fit(X_tr, y_tr, model__sample_weight=weights)
@@ -208,7 +210,49 @@ def temporal_validation(table: pd.DataFrame, n_splits: int = 5) -> dict:
     metrics["Siempre la clase mayoritaria"]["roc_auc_ic95"] = (float("nan"), float("nan"))
     per_round = pd.DataFrame(auc_per_round, index=[f"corte {i + 1}" for i in range(n_splits)]).round(3)
     return {"tabla": metrics_table(metrics), "auc_por_corte": per_round,
-            "y": y_all, "probabilidades": probabilities}
+            "y": y_all, "probabilidades": probabilities,
+            "seed_tier": np.concatenate(tiers)}
+
+
+# Three bands of seed_tier for the per-tier check (labels in Spanish, as in the notebook).
+TIER_BANDS = {
+    "Hierro a Platino": ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM"],
+    "Esmeralda y Diamante": ["EMERALD", "DIAMOND"],
+    "Maestro o superior": ["MASTER", "GRANDMASTER", "CHALLENGER"],
+}
+
+
+def metrics_by_tier_band(y, proba, tiers) -> pd.DataFrame:
+    """Accuracy and ROC AUC (each with a bootstrap 95 % interval) for each band of TIER_BANDS.
+
+    Caveat: seed_tier is the tier of the player through whom the match was found, NOT of all ten
+    players. A match found through a Gold player can still contain Diamond players.
+
+    A band with no matches gets NaN everywhere; a band whose matches all have the same result
+    keeps its accuracy but gets NaN for the ROC AUC and its interval. A tier that belongs to no
+    band raises ValueError.
+    """
+    y, proba, tiers = np.asarray(y), np.asarray(proba, dtype=float), np.asarray(tiers)
+    band_of = {tier: band for band, members in TIER_BANDS.items() for tier in members}
+    unknown = sorted({str(t) for t in tiers if t not in band_of})
+    if unknown:
+        raise ValueError(f"tier(s) not in any band: {unknown}")
+    bands = np.array([band_of[t] for t in tiers], dtype=object)
+    nan2 = (float("nan"), float("nan"))
+    rows = []
+    for band in TIER_BANDS:
+        mask = bands == band
+        yb, pb = y[mask], proba[mask]
+        acc, acc_ci, auc, auc_ci = float("nan"), nan2, float("nan"), nan2
+        if len(yb):
+            pred = (pb >= 0.5).astype(int)
+            acc, acc_ci = float(accuracy_score(yb, pred)), bootstrap_accuracy_ci(yb, pred)
+            if len(np.unique(yb)) == 2:
+                auc, auc_ci = float(roc_auc_score(yb, pb)), bootstrap_auc_ci(yb, pb)
+        rows.append({"banda": band, "partidas": int(mask.sum()), "accuracy": acc,
+                     "ic95_bajo": acc_ci[0], "ic95_alto": acc_ci[1], "roc_auc": auc,
+                     "auc_ic95_bajo": auc_ci[0], "auc_ic95_alto": auc_ci[1]})
+    return pd.DataFrame(rows).set_index("banda").round(3)
 
 
 def position_features(features: list[str]) -> list[str]:
@@ -274,6 +318,9 @@ def main():
     difference = sensitivity["diferencia_auc"]
     low, high = difference["ic95"]
     print(f"Con todas menos sin posición (ROC AUC): {difference['diferencia']:+.3f} (IC 95 %: {low:+.3f} a {high:+.3f})")
+    print()
+    print("Regresión logística por banda de rango (validación temporal; rango = el del jugador semilla):")
+    print(metrics_by_tier_band(walk["y"], walk["probabilidades"]["Regresión logística"], walk["seed_tier"]).to_string())
 
 
 if __name__ == "__main__":

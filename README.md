@@ -43,7 +43,13 @@ would go over Riot's limit (100 requests / 2 minutes).
 
     python -m scripts.export_dataset   # database -> data/export/*.csv (anonymized player IDs)
     python -m src.features.build       # -> data/features/partidas.csv, one row per match
-    python -m src.models.train         # baselines, logistic regression, random forest + metrics
+    python -m src.models.train         # baselines, logistic regression, random forest + metrics, also per rank band
+    python -m src.models.predict --train          # fit the final model, save data/models/modelo_final.joblib
+    python -m src.models.predict LA1_123456       # probability that blue won that (already played) match
+
+The final model is the logistic regression without the position variables. **Limit:** it scores only
+matches that were already played. Riot's live-game endpoint gives no positions, so a true live
+prediction would need role inference, which is not built. The signal is weak (see NOTES.md).
 
 `notebooks/entrega3_modelo.ipynb` runs the same steps with charts (and in Google Colab).
 

@@ -94,6 +94,9 @@ def player_features(history: pd.DataFrame, participants: pd.DataFrame, matches: 
 
     feats = participants[participants["match_id"].isin(target_start.index)].merge(
         per_player, on=["match_id", "player_id"], how="left")
+    # An all-empty history leaves these as object columns: make them numeric so the maths below works.
+    numeric = ["winrate_10", "racha", "dias_desde_ultima", "kda_medio"]
+    feats[numeric] = feats[numeric].astype(float)
     feats["partidas_previas"] = feats["partidas_previas"].fillna(0).astype(int)
     feats["sin_historial"] = (feats["partidas_previas"] == 0).astype(int)
     feats["en_linea_habitual"] = np.where(
