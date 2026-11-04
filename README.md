@@ -56,10 +56,10 @@ would go over Riot's limit (100 requests / 2 minutes).
 | `src/agents/` | The five data-collection agents |
 | `src/features/` | Pre-game variables per player and per match (blue minus red, lane against lane) |
 | `src/models/` | Chronological split, baselines, models and metrics |
-| `scripts/` | Runnable scripts: `run_pipeline.py`, `hello_riot.py` |
+| `scripts/` | Runnable scripts: `run_pipeline.py`, `export_dataset.py`, `hello_riot.py` |
 | `tests/` | Automated tests (no real API calls) |
 | `data/` | Downloaded matches and the database (not in git) |
-| `notebooks/` | Data exploration |
+| `notebooks/` | Data exploration (`entrega2_eda.ipynb`) and the model (`entrega3_modelo.ipynb`) |
 
 ## Roadmap
 
@@ -69,6 +69,8 @@ would go over Riot's limit (100 requests / 2 minutes).
 - [x] Full data collection run: 920 matches with the history of all 10 players
 - [x] Feature engineering
 - [x] Model training (first version: weak signal, see NOTES.md)
+- [x] Sensitivity check on the position variables (see NOTES.md)
+- [ ] More data: a longer period, especially for the test set
 
 ---
 This project isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone

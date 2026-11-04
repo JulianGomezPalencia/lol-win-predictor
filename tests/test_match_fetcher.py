@@ -109,9 +109,11 @@ def db_path(tmp_path):
 
 def test_mark_match_invalid_is_saved(db_path):
     conn = db.connect(db_path)
-    db.mark_match_invalid(conn, "LA1_1")
+    db.mark_match_invalid(conn, "LA1_1", "remake")
     conn.close()
-    assert db.count_target_matches_by_status(db.connect(db_path)) == {"invalid": 1}
+    conn = db.connect(db_path)
+    assert db.count_target_matches_by_status(conn) == {"invalid": 1}
+    assert conn.execute("SELECT invalid_reason FROM target_matches").fetchone()[0] == "remake"
 
 
 def test_save_fetched_match_is_saved(db_path):
@@ -153,6 +155,8 @@ def test_fetch_pending(conn, monkeypatch):
     assert counts == {"fetched": 1, "remake": 1, "wrong queue": 1}
     assert db.count_target_matches_by_status(conn) == {"fetched": 1, "invalid": 2}
     assert match_fetcher.fetch_pending(conn) == {}, "nothing pending left -> nothing to do"
+    reasons = dict(conn.execute("SELECT match_id, invalid_reason FROM target_matches").fetchall())
+    assert reasons == {"LA1_GOOD": None, "LA1_REMAKE": "remake", "LA1_ARAM": "wrong queue"}
 
 
 class FakeHTTPResponse:

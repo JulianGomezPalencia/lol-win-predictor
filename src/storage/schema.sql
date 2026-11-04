@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS target_matches (
     -- Empty for now. Agent 3 fills these when it downloads the match:
     game_start_ts  INTEGER,         -- milliseconds since 1970 (Riot's format)
     patch          TEXT,            -- e.g. "16.8"
-    blue_win       INTEGER          -- 1 = blue side won, 0 = red side won (SQLite has no true/false)
+    blue_win       INTEGER,         -- 1 = blue side won, 0 = red side won (SQLite has no true/false)
+    invalid_reason TEXT             -- why Agent 3 rejected it: remake, wrong queue, missing position, not found...
 );
 
 -- Agent 3 (match fetcher): the 10 players of each valid target match.

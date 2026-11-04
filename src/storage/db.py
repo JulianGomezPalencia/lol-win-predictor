@@ -29,7 +29,16 @@ def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row  # rows behave like dicts: row["tier"] instead of row[1]
     conn.executescript(SCHEMA_PATH.read_text())
+    _add_missing_columns(conn)
     return conn
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    """Bring an older database up to date: CREATE TABLE IF NOT EXISTS never changes an existing table."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(target_matches)")}
+    if "invalid_reason" not in columns:
+        conn.execute("ALTER TABLE target_matches ADD COLUMN invalid_reason TEXT")
+        conn.commit()
 
 
 def upsert_player(conn: sqlite3.Connection, puuid: str, tier: str, division: str, lp: int) -> None:
@@ -99,9 +108,10 @@ def get_match_ids_by_status(conn: sqlite3.Connection, status: str) -> list[str]:
     return [row["match_id"] for row in rows]
 
 
-def mark_match_invalid(conn: sqlite3.Connection, match_id: str) -> None:
-    """Set this target match's status to 'invalid' (remake, wrong queue, ...)."""
-    conn.execute("UPDATE target_matches SET status = 'invalid' WHERE match_id = ?", (match_id,))
+def mark_match_invalid(conn: sqlite3.Connection, match_id: str, reason: str) -> None:
+    """Set this target match's status to 'invalid' and record why (remake, wrong queue, ...)."""
+    conn.execute("UPDATE target_matches SET status = 'invalid', invalid_reason = ? WHERE match_id = ?",
+                 (reason, match_id))
     conn.commit()
 
 

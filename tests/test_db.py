@@ -4,6 +4,8 @@ so nothing touches your real data/db/lol.sqlite.
 
 Run with:  pytest tests/test_db.py -v
 """
+import sqlite3
+
 import pytest
 
 from src.storage import db
@@ -54,3 +56,20 @@ def test_count_players_by_tier(conn):
 
 def test_count_players_by_tier_empty(conn):
     assert db.count_players_by_tier(conn) == {}
+
+
+def test_connect_adds_invalid_reason_to_an_older_database(tmp_path):
+    path = tmp_path / "old.sqlite"
+    old = sqlite3.connect(path)
+    old.execute("""CREATE TABLE target_matches (match_id TEXT PRIMARY KEY, status TEXT NOT NULL DEFAULT 'pending',
+                   seed_puuid TEXT NOT NULL, seed_tier TEXT NOT NULL, discovered_at TEXT NOT NULL,
+                   game_start_ts INTEGER, patch TEXT, blue_win INTEGER)""")
+    old.execute("INSERT INTO target_matches VALUES ('LA1_1', 'invalid', 'seed', 'GOLD', 'now', NULL, NULL, NULL)")
+    old.commit()
+    old.close()
+
+    conn = db.connect(path)
+    row = conn.execute("SELECT status, invalid_reason FROM target_matches").fetchone()
+    assert (row["status"], row["invalid_reason"]) == ("invalid", None), "existing rows are kept"
+    conn.close()
+    db.connect(path).close()  # a second connect must not try to add the column again

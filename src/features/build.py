@@ -9,8 +9,9 @@ Two levels:
   match_features()   one row per match: blue minus red, as a team and lane against lane
 
 The prediction is meant to be made after champion select: the champion each player picked and
-their position in the match are treated as known. (Riot fills in teamPosition after the game from
-what the player did; in practice it matches the role from champion select almost always.)
+their position in the match are treated as known. Riot fills in teamPosition after the game from
+what the player did, and the API doesn't give the role from champion select, so this assumption
+can't be checked directly: train.position_sensitivity measures how much the results depend on it.
 
 Lane against lane is the new idea after the EDA: on their own, absolute numbers (a 60 % win rate)
 said nothing about who wins, so we compare each player with the opponent in the same position.

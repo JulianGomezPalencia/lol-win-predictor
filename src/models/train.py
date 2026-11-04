@@ -114,6 +114,20 @@ def paired_accuracy_difference(y, proba_model, proba_baseline, n_boot: int = 200
     return {"diferencia": float(diff.mean()), "ic95": (float(low), float(high))}
 
 
+def paired_auc_difference(y, proba_a, proba_b, n_boot: int = 2000, seed: int = SEED) -> dict:
+    """ROC AUC of A minus B on the SAME matches, with a paired bootstrap interval."""
+    y, proba_a, proba_b = np.asarray(y), np.asarray(proba_a), np.asarray(proba_b)
+    rng = np.random.default_rng(seed)
+    samples = []
+    for _ in range(n_boot):
+        idx = rng.integers(0, len(y), len(y))
+        if len(np.unique(y[idx])) == 2:  # a resample with one class only has no AUC
+            samples.append(roc_auc_score(y[idx], proba_a[idx]) - roc_auc_score(y[idx], proba_b[idx]))
+    low, high = np.percentile(samples, [2.5, 97.5])
+    return {"diferencia": float(roc_auc_score(y, proba_a) - roc_auc_score(y, proba_b)),
+            "ic95": (float(low), float(high))}
+
+
 def evaluate(y: pd.Series, proba: np.ndarray) -> dict:
     """Test-set metrics from the predicted probability of a blue win."""
     y = np.asarray(y)
@@ -197,6 +211,30 @@ def temporal_validation(table: pd.DataFrame, n_splits: int = 5) -> dict:
             "y": y_all, "probabilidades": probabilities}
 
 
+def position_features(features: list[str]) -> list[str]:
+    """The variables that compare a player's team_position in the match with their usual lane."""
+    return [name for name in features if "en_linea_habitual" in name or "fuera_de_posicion" in name]
+
+
+def position_sensitivity(table: pd.DataFrame, n_splits: int = 5) -> dict:
+    """How much of the logistic regression's signal depends on the position variables?
+
+    Riot fills in teamPosition AFTER the game, from what each player did, and the API doesn't give
+    the role from champion select. A player who left their lane during a game could therefore look
+    "off-role" because of how that game went, which would be a leak we can't rule out directly.
+    Repeating the walk-forward without those variables shows how much the result relies on them.
+    The lane-against-lane variables that remain still use team_position to pair the opponents.
+    """
+    name = "Regresión logística"
+    all_variables = temporal_validation(table, n_splits)
+    without = temporal_validation(table.drop(columns=position_features(feature_columns(table))), n_splits)
+    rows = {"Con todas las variables": all_variables["tabla"].loc[name],
+            "Sin variables de posición": without["tabla"].loc[name]}
+    return {"tabla": pd.DataFrame(rows).T,
+            "diferencia_auc": paired_auc_difference(all_variables["y"], all_variables["probabilidades"][name],
+                                                    without["probabilidades"][name])}
+
+
 def metrics_table(metrics: dict) -> pd.DataFrame:
     rows = []
     for name, m in metrics.items():
@@ -229,6 +267,13 @@ def main():
                                         walk["probabilidades"]["Siempre la clase mayoritaria"])
     low, high = paired["ic95"]
     print(f"\nRegresión logística menos línea base (accuracy): {paired['diferencia']:+.3f} (IC 95 %: {low:+.3f} a {high:+.3f})")
+    print()
+    print("Sensibilidad a las variables de posición (regresión logística):")
+    sensitivity = position_sensitivity(table)
+    print(sensitivity["tabla"].to_string())
+    difference = sensitivity["diferencia_auc"]
+    low, high = difference["ic95"]
+    print(f"Con todas menos sin posición (ROC AUC): {difference['diferencia']:+.3f} (IC 95 %: {low:+.3f} a {high:+.3f})")
 
 
 if __name__ == "__main__":

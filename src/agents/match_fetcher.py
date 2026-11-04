@@ -101,7 +101,7 @@ def fetch_pending(conn) -> dict[str, int]:
             match = None
         reason = "not found" if match is None else invalid_reason(match)
         if reason:
-            db.mark_match_invalid(conn, match_id)
+            db.mark_match_invalid(conn, match_id, reason)
             counts[reason] = counts.get(reason, 0) + 1
         else:
             db.save_fetched_match(conn, match_id, summarize(match), extract_participants(match))

@@ -94,3 +94,27 @@ def test_paired_difference_counts_only_disagreements():
     result = train.paired_accuracy_difference(y, model, baseline)
     assert result["diferencia"] == pytest.approx(0.25)
     assert result["ic95"][0] <= 0.25 <= result["ic95"][1]
+
+
+def test_position_features_picks_only_the_position_variables():
+    names = ["dif_en_linea_habitual", "top_dif_en_linea_habitual", "dif_fuera_de_posicion", "dif_kda_medio"]
+    assert train.position_features(names) == names[:3]
+
+
+def test_paired_auc_difference_on_identical_and_better_predictions():
+    y = np.array([0, 1] * 50)
+    noise = np.random.default_rng(2).normal(size=100)
+    same = train.paired_auc_difference(y, noise, noise)
+    assert same["diferencia"] == 0 and same["ic95"] == (0, 0)
+    better = train.paired_auc_difference(y, y + 0.1 * noise, noise)
+    assert better["ic95"][0] <= better["diferencia"] <= better["ic95"][1]
+    assert better["ic95"][0] > 0
+
+
+def test_position_sensitivity_shows_when_the_signal_lives_in_position():
+    table = synthetic_table(n=300).rename(columns={"dif_kda_medio": "dif_en_linea_habitual"})
+    result = train.position_sensitivity(table)
+    aucs = result["tabla"]["roc_auc"]
+    assert aucs["Con todas las variables"] > 0.8
+    assert aucs["Sin variables de posición"] < 0.65
+    assert result["diferencia_auc"]["ic95"][0] > 0

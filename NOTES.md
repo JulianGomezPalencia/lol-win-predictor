@@ -20,7 +20,7 @@ Things to fix or improve later. Check items off as they're done.
   For the model, consider an `is_unranked` feature (1/0) — being unranked is itself a signal
   (placements, returning player, smurf).
 
-- [ ] **Target matches are unbalanced across tiers** (found after the first discovery run, 954 matches)
+- [x] **Target matches are unbalanced across tiers** — handled in training: `train.tier_weights` makes every tier count the same in the fit. The dataset itself is still 51 % Master+.  (found after the first discovery run, 954 matches)
   Seeds are balanced (40 players/tier), but high-elo players play much more in 14 days:
   MASTER 160, GRANDMASTER 159, CHALLENGER 149, DIAMOND 129 … BRONZE 42.
   Almost half the dataset comes from Master+, which is ~1% of the real player base.
@@ -32,20 +32,22 @@ Things to fix or improve later. Check items off as they're done.
 Reviewer 1 reviewed the whole repo; Reviewer 2 verified each finding against the code.
 Confirmed fixes were applied. These were judged real but not urgent:
 
-- [ ] **Check history completeness before feature engineering.** A target is marked `history_done`
-  whatever number of rows it got. Fewer than 10 per player is legitimate (new accounts), but run:
-  `SELECT target_match_id, COUNT(*) FROM player_history GROUP BY 1 ORDER BY 2` and look at the low end.
-- [ ] **Decide whether remakes count toward the 10 history games.** Right now a remake takes a slot
-  (it's stored with `remake = 1`). Option: request more than 10 IDs and keep the first 10 non-remakes.
+- [x] **Check history completeness before feature engineering.** Checked 2026-11-04 on the 9,200
+  participants of the 920 matches: 9,036 have all 10 rows, 56 have 1 to 9, and 108 have none (they get
+  `sin_historial = 1`). The lowest match has 65 of 100 rows.
+- [x] **Decide whether remakes count toward the 10 history games.** Decided: collection keeps them in
+  their slot (`remake = 1`, 3.5 % of the rows) and `build.player_features` ignores them, so a player
+  can have slightly fewer than 10 usable games. `partidas_previas` records how many.
 - [ ] **History games only store the player's own side.** By design (see schema.sql), the other 9
   players of a history game aren't in `match_participants`. The full JSON is cached, so this can be
-  backfilled if a feature ever needs it.
+  backfilled if a feature ever needs it. The current 29 variables don't need it.
 - [ ] **Champion mastery gap.** Agent 5 snapshots each player once. If a later discovery run adds
-  matches where they play a different champion, that champion's mastery is never fetched.
-- [ ] **Store why a match is invalid.** `mark_match_invalid` drops the reason (remake / wrong queue /
-  missing position / not found). Needs a new column: `CREATE TABLE IF NOT EXISTS` won't add it to
-  the existing database, so it needs an `ALTER TABLE target_matches ADD COLUMN invalid_reason TEXT`.
-- [ ] **More tests:** `save_history` rolling back when an insert fails; a history test with all
+  matches where they play a different champion, that champion's mastery is never fetched. The model
+  doesn't use mastery: the snapshot reflects the day of the query, not the day of the match.
+- [x] **Store why a match is invalid.** New `target_matches.invalid_reason` column; `db.connect` adds it
+  to older databases. Only matches rejected from now on get a reason: the 34 existing ones stay NULL
+  (the Entrega 2 report counted them: 29 remakes, 5 missing position).
+- [x] **More tests:** `save_history` rolling back when an insert fails; a history test with all
   10 participants instead of 1.
 - **One process at a time** (documented in README): the 1.25 s spacing lives inside each process,
   so two agents running at once would exceed 100 requests / 2 minutes.
@@ -86,6 +88,21 @@ Confirmed fixes were applied. These were judged real but not urgent:
 - Review (2026-10-26) items left as documented choices: tier weights only in the fit (weighted
   scoring picks the same hyperparameters); sin_historial can't tell firewall-blocked players from new
   ones (~1 %); prediction assumes champion select is over (champion and position known).
+
+## Position sensitivity (2026-11-04)
+
+`team_position` is filled in by Riot after the game and the API has no champion-select role, so the
+seven position variables might carry information from the match itself. We can't check that directly;
+`train.position_sensitivity` repeats the walk-forward (logistic regression) without them:
+
+| | Accuracy | ROC AUC (95 % CI) |
+|---|---|---|
+| All 29 variables | 54.6 % | 0.571 (0.532–0.611) |
+| Without the 7 position variables | 54.6 % | 0.549 (0.507–0.588) |
+
+The paired AUC difference is +0.022 (95 % CI −0.004 to +0.051): not distinguishable from zero, but a
+leak can't be ruled out either. Quote 0.549 as the cautious estimate. The remaining lane-against-lane
+variables still use `team_position` to pair opponents.
 
 ## Ideas
 
