@@ -168,6 +168,78 @@ training data, predicted end to end with the real API (about 110 calls): 39.2 % 
 without history. One match says nothing about accuracy. `--live` was not run against a real player (needs someone
 in a game); it is covered by tests with fake endpoints.
 
+## Congelado el 2026-11-05
+
+**Why.** The analysis chose variables using all 1,206 matches, so those matches can no
+longer test anything. 920 (2026-09-26 to 10-10) trained the saved model; 286 (10-22 to 11-05) were used by the
+analysis. Pending matches are only guaranteed to be after the 920 (the code enforces this by date); the export has no `game_start_ts` for them, so they may overlap in time with the 286, and older ones are excluded by date.
+
+**Frozen.**
+- *Development set:* the 1,206 `history_done` ids in `data/export` (listed in `data/models/conjunto_desarrollo.csv`,
+  `ajuste` = the 920, `seleccion` = the 286).
+- *Base model:* the saved 22-variable logistic regression, copied byte for byte to `modelo_base_22.joblib`.
+- *Deviation from the task wording (decision 3):* the task said to train on the fixed list of 1,206; the plan fits the candidate on the 920 only, so base and candidate share training data and the test is strictly forward. The 286 are in the development list but excluded from both fit and test. `--train` later refits on everything.
+- *Candidate:* logistic regression (the existing C grid, tier weights) on exactly the same 920 matches with the 10
+  variables of `build.FINAL_FEATURES`: `dif_winrate_10`, `dif_partidas_con_campeon`, `dif_racha`,
+  `dif_log_dias_desde_ultima`, `dif_kda_medio`, `dif_partidas_previas`, `dif_sin_historial`, `dif_kills_medio`,
+  `dif_partidas_24h`, `dif_winrate_campeon_posicion`. Saved as `modelo_candidato.joblib` (and, until the final
+  retrain, as `modelo_final.joblib`).
+- *Test set:* matches in the export that are not in the 1,206 and were played after the last of the 920.
+  The base uses `build.build(inferred_positions=True)` (old roles, no champion); the candidate uses its frozen pool
+  and role table.
+- *Primary criterion:* the candidate is better only if the 95 % bootstrap interval of the paired log-loss difference
+  (base minus candidate) is above 0. AUC and accuracy are reported too.
+- *Sensitivity check (not a second chance):* the first 9 variables, fitted the same way, scored on the same matches.
+- Comparing with a constant (the training blue win rate) is also printed.
+
+**Champion in role inference.** `roles.CHAMPION_WEIGHT` adds `weight * share` per position, with `share` from the
+frozen pool (the 920's history). Chosen ONLY by agreement with Riot's `teamPosition` on the 1,206 matches (12,060
+players), never by win results:
+
+| | Overall | TOP | JUNGLE | MIDDLE | BOTTOM | UTILITY |
+|---|---|---|---|---|---|---|
+| No champion (old) | 81.53 % | 76.4 | 100.0 | 73.8 | 77.4 | 80.1 |
+| Weight 0.5 | 93.81 % | 90.5 | 100.0 | 89.1 | 94.1 | 95.4 |
+| **Weight 1 (chosen)** | **95.34 %** | 92.7 | 100.0 | 90.8 | 95.8 | 97.4 |
+| Weight 2 | 95.27 % | 92.6 | 100.0 | 90.5 | 95.8 | 97.5 |
+
+Cases like the live Pyke-top / Riven-support game: Pyke games agree with Riot in 69.9 % of cases without the
+champion and 93.2 % with it (73 games); Riven (49 games) stays at 81.6 % with and without the champion, so it did not change in the aggregate (an earlier draft gave Aatrox's figures, 80.0 % / 96.0 %, 75 games, by mistake). Part of this agreement is optimistic
+(the shares come from the same period), and Smite still decides JUNGLE. Base-model comparisons use the old roles
+on purpose.
+
+**Champion-by-position is unstable.** In the analysis its univariate AUC was 0.550 before the gap between the two
+collections and 0.496 after it (chance); kills kept the same direction in all four time blocks. It stays in the
+frozen list because it improved walk-forward results (10 variables AUC 0.565 vs 0.549 for 9), not because it is
+proven; the CV gain was not significant (AUC +0.008, p = 0.066). The 9-variable check shows what it costs or adds.
+
+**Deviation from `analysis.py`.** There the overall win rate used as the last prior is one global number; here it is
+the pool's rate BEFORE the match start (a pool row at or after `t` must not change anything). The champion and
+champion-by-position rates are the same (k = 20).
+
+**Real `--freeze` output (2026-11-05):**
+
+    Ajuste: 920 partidas (10 variables, {'model__C': 0.01}); desarrollo: 1206 partidas; pool: 66344 partidas previas;
+    campeones con tabla de posiciones: 173.
+    ROC AUC en validación temporal (optimista): 0.564 (IC 95 %: 0.523 a 0.602)
+
+Walk-forward of the candidate with the new roles: **920 matches AUC 0.564 (0.523 to 0.602), accuracy 54.1 %;
+1,206 matches AUC 0.551 (0.515 to 0.587), accuracy 53.3 %** (the 1,206 use the 920's pool for the 286). They differ
+from the analysis' numbers; the variable set was not changed because of them. These AUCs are optimistic: the
+variables were chosen on these matches.
+
+**Checks.** `dif_kills_medio` and `dif_partidas_24h` of the real table match `analysis.py`'s `n_dif_kills` and
+`n_dif_games_24h` exactly on all 1,206 matches (max absolute difference 0.0, same NaNs). `--evaluate-new` on the
+current export prints 0 test matches and writes nothing (no `prueba_final.json`). The md5 of every file in
+`data/export/` is identical to the one taken before the work.
+
+**Stale-pool conservatism.** The test pool is frozen at 2026-10-10, so for the new matches it is older than what the
+final model will have. That makes the test conservative for `dif_winrate_campeon_posicion`: a favourable result is
+credible, an unfavourable one on that variable partly reflects the stale pool.
+
+**Code clean-up.** Removed `features_for_match` and the old-bundle branch of `in_training_data`; `scripts/export_dataset.py`
+now reads every table from one sqlite backup snapshot in a temporary file.
+
 ## Ideas
 
 - [ ] **More data.** The matches cover two weeks only. Re-running `--steps discover` later adds

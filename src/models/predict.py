@@ -1,28 +1,38 @@
 """
-Final model and prediction: played matches, live games, and a forward test of the frozen model.
+Frozen 10-variable model, prediction of played and live matches, and the forward test.
 
-  python -m src.models.predict --train               # fit on data/export, save data/models/modelo_final.joblib
+Order of use (see README):
+  python -m src.models.predict --freeze              # ONCE: fit the candidate on the 920 matches of the saved 22-variable
+                                                     #   model, keep that model as modelo_base_22.joblib, freeze the test
+  python -m src.models.predict --evaluate-new        # candidate vs base on matches that are NOT in the 1,206 development
+                                                     #   matches and were played after the last of the 920 (never refits)
+  python -m src.models.predict --train               # only after a test result: refit on every usable match, save modelo_final
   python -m src.models.predict LA1_123456            # probability that blue wins that (played) match
   python -m src.models.predict --live "Name#TAG"     # a game in progress (spectator-v5), BEFORE it ends
   python -m src.models.predict --score-log           # compare the logged live predictions with the real results
-  python -m src.models.predict --evaluate-new        # frozen model vs matches collected AFTER it was trained
 
-Roles. Riot assigns teamPosition after the game and the live endpoint gives no position, so the model
-uses INFERRED roles everywhere (src/features/roles.py: summoner spells + earlier games). Training,
-played-match prediction and live prediction share the same path (score_game), so they always agree.
-The saved model is the logistic regression without the position variables, fitted on all matches with
-tier weights; its walk-forward ROC AUC is stored in the bundle and shown with every prediction.
-Bundles saved before this change (no "roles": "inferred") are refused: retrain with --train.
+The model. Logistic regression (the existing C grid and tier weights) on the 10 variables of build.FINAL_FEATURES.
+The bundle (version 2) also holds the champion pool and the champion-by-position shares it was built with, the
+ids of the development matches and a fitted 9-variable model (a stated sensitivity check). Bundles without
+version 2 are refused by check_bundle, except as the base of --evaluate-new.
+
+Roles. Riot assigns teamPosition after the game and the live endpoint gives no position, so the model uses
+INFERRED roles everywhere (src/features/roles.py: summoner spells, earlier games and the champion played).
+Training, played-match prediction and live prediction share one path (score_game), so they always agree.
 
 Live limits: the game must be ranked solo/duo (queue 420) and in progress; a hidden or firewall-blocked
 player has no history; collecting data (run_pipeline) and --live must not run at the same time, because
 each process has its own rate limiter.
 
-Never touches data/db/lol.sqlite (db.connect would migrate it) and never writes to data/export.
+--freeze, --evaluate-new and --train read data/export and write only to data/models. None of them calls the
+Riot API or opens data/db/lol.sqlite, and none writes to data/export.
 Tests:    pytest tests/test_predict.py -v
 """
 import argparse
 import csv
+import filecmp
+import json
+import shutil
 import time
 import warnings
 from datetime import datetime, timezone
@@ -35,43 +45,68 @@ import pandas as pd
 import sklearn
 from sklearn.metrics import accuracy_score, log_loss, roc_auc_score
 
-from src.features import build
+from src.features import build, champion_pool
 from src.models import train
 
 # src.agents / src.riot_client are imported only where a match is downloaded: their config needs
 # RIOT_API_KEY, and --train makes no API calls (tests/test_predict.py checks this without a key).
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-MODEL_PATH = PROJECT_ROOT / "data" / "models" / "modelo_final.joblib"
+MODELS_DIR = PROJECT_ROOT / "data" / "models"
+MODEL_PATH = MODELS_DIR / "modelo_final.joblib"
+BASE_NAME, CANDIDATE_NAME = "modelo_base_22.joblib", "modelo_candidato.joblib"
+TEST_RESULT_NAME, DEVELOPMENT_NAME = "prueba_final.json", "conjunto_desarrollo.csv"
 LOGISTIC = "Regresión logística"
 LOG_PATH = PROJECT_ROOT / "data" / "predictions" / "live_log.csv"
 LOG_COLUMNS = ["game_id", "platform", "timestamp", "prob_blue", "model_trained_at"]
 RANKED_SOLO_QUEUE = 420
 MIN_FINISHED_FOR_AUC = 10
-RETRAIN_MESSAGE = ("El modelo guardado usa posiciones de Riot (posteriores a la partida) o es de una versión "
-                   "anterior. Vuelve a entrenar con: python -m src.models.predict --train")
+BUNDLE_VERSION = 2
+BASE_FEATURE_COUNT, BASE_MATCH_COUNT, DEVELOPMENT_COUNT = 22, 920, 1206  # what --freeze expects to find
+LOW_POWER_N = 1000
+RETRAIN_MESSAGE = ("El modelo guardado es de una versión anterior (sin las 10 variables congeladas) o usa posiciones "
+                   "de Riot. Congélalo con: python -m src.models.predict --freeze (una vez); después de la prueba, "
+                   "reentrena con: python -m src.models.predict --train")
 
 HISTORY_COLUMNS = ["target_match_id", "player_id", "history_rank", "history_match_id", "game_start_ts",
                    "game_duration", "remake", "win", "champion_id", "champion_name", "team_position",
                    "kills", "deaths", "assists"]
+META_COLUMNS = ["match_id", "blue_win", "seed_tier", "game_start_ts"]
 
 
-def fit_final_model(table: pd.DataFrame) -> dict:
-    """Fit the logistic regression on ALL rows, without position variables, and describe it.
-
-    `table` should come from build.build(inferred_positions=True): the bundle says so ("roles").
-    """
-    reduced = table.drop(columns=train.position_features(build.feature_columns(table)))
-    features = build.feature_columns(reduced)
+def _fit_logistic(table: pd.DataFrame, features: list[str]):
     search = train.logistic_model()
-    search.fit(reduced[features], reduced["blue_win"],
-               model__sample_weight=train.tier_weights(reduced["seed_tier"]))
+    search.fit(table[features], table["blue_win"], model__sample_weight=train.tier_weights(table["seed_tier"]))
+    return search
+
+
+def fit_final_model(table: pd.DataFrame, pool: pd.DataFrame, champion_positions: dict,
+                    development_ids=()) -> dict:
+    """Fit the frozen 10-variable logistic regression on ALL rows of `table` and describe it.
+
+    `table` comes from build.build(inferred_positions=True, final_features=True, ...). `pool` and
+    `champion_positions` are the ones that table was built with; they travel in the bundle so that a
+    played or live game is scored with the same pool and role table. A 9-variable model is fitted too.
+    """
+    missing = [f for f in build.FINAL_FEATURES if f not in table.columns]
+    if missing:
+        raise ValueError(f"Faltan variables en la tabla: {missing}")
+    reduced = table[META_COLUMNS + build.FINAL_FEATURES]
+    features = list(build.FINAL_FEATURES)
+    search = _fit_logistic(reduced, features)
+    nine = _fit_logistic(reduced, list(build.SENSITIVITY_FEATURES))
     row = train.temporal_validation(reduced)["tabla"].loc[LOGISTIC]
     blue_rate = float(reduced["blue_win"].mean())
     return {
+        "version": BUNDLE_VERSION,
         "model": search.best_estimator_,
         "features": features,
         "best_params": search.best_params_,
+        "sensibilidad": {"model": nine.best_estimator_, "features": list(build.SENSITIVITY_FEATURES),
+                         "best_params": nine.best_params_},
+        "pool": pool,
+        "champion_positions": champion_positions,
+        "development_ids": sorted(str(i) for i in development_ids),
         "n_matches": int(len(reduced)),
         "match_ids": sorted(reduced["match_id"].astype(str)),
         "first_match_ts": int(reduced["game_start_ts"].min()),
@@ -96,7 +131,7 @@ def save_model(bundle: dict, path: Path = MODEL_PATH) -> Path:
 def load_model(path: Path = MODEL_PATH) -> dict:
     path = Path(path)
     if not path.exists():
-        raise FileNotFoundError(f"No hay modelo guardado en {path}. Ejecuta primero: python -m src.models.predict --train")
+        raise FileNotFoundError(f"No hay modelo guardado en {path}. Ejecuta primero: python -m src.models.predict --freeze")
     bundle = joblib.load(path)
     if bundle.get("sklearn_version") != sklearn.__version__:
         warnings.warn(f"El modelo se guardó con scikit-learn {bundle.get('sklearn_version')} y ahora hay "
@@ -105,8 +140,8 @@ def load_model(path: Path = MODEL_PATH) -> dict:
 
 
 def check_bundle(bundle: dict) -> None:
-    """Refuse a bundle trained with Riot's post-game positions (it would not match inferred roles)."""
-    if bundle.get("roles") != "inferred":
+    """Refuse anything that is not a version 2 bundle with inferred roles."""
+    if bundle.get("version") != BUNDLE_VERSION or bundle.get("roles") != "inferred":
         raise ValueError(RETRAIN_MESSAGE)
 
 
@@ -121,11 +156,14 @@ def players_from_match(match: dict) -> list[dict]:
 
 
 def features_for_game(game_id: str, start_ts: int, players: list[dict], histories: dict[str, list[dict]],
-                      blue_win: int = 0, patch: str = "") -> tuple[pd.DataFrame, dict]:
+                      blue_win: int = 0, patch: str = "", pool: pd.DataFrame | None = None,
+                      champion_positions: dict | None = None) -> tuple[pd.DataFrame, dict]:
     """One-row feature table and the inferred role of each player. Pure: no API, no files.
 
     `players`: dicts with key, team_id, champion_id, champion_name, spell_ids.
     `histories` maps key -> rows from history_builder.player_history (missing or empty = no history).
+    `pool` and `champion_positions` are the model's (bundle["pool"], bundle["champion_positions"]); with a pool
+    the three variables of the frozen set are built too.
     Roles come from build.inferred_participants, the feature logic from build.player_features /
     build.match_features: nothing is reimplemented here, so training and prediction cannot drift apart.
     `blue_win` only fills the label column; no feature reads it.
@@ -141,25 +179,18 @@ def features_for_game(game_id: str, start_ts: int, players: list[dict], historie
     rows = [{"target_match_id": game_id, "player_id": key, **game}
             for key, games in histories.items() for game in games]
     history = pd.DataFrame(rows, columns=HISTORY_COLUMNS)
-    participants = build.inferred_participants(participants, history, matches, spells)
-    table = build.match_features(build.player_features(history, participants, matches), matches)
+    participants = build.inferred_participants(participants, history, matches, spells, champion_positions)
+    table = build.match_features(build.player_features(history, participants, matches, pool), matches,
+                                 final_features=pool is not None)
     return table, dict(zip(participants["player_id"], participants["team_position"]))
-
-
-def features_for_match(match: dict, histories: dict[str, list[dict]]) -> pd.DataFrame:
-    """One-row feature table for a match-v5 dict (inferred roles). Pure: no API, no files."""
-    from src.agents import match_fetcher
-    summary = match_fetcher.summarize(match)
-    table, _ = features_for_game(match["metadata"]["matchId"], summary["game_start_ts"],
-                                 players_from_match(match), histories, summary["blue_win"], summary["patch"])
-    return table
 
 
 def score_game(game_id: str, start_ts: int, players: list[dict], histories: dict[str, list[dict]],
                bundle: dict, blue_win: int = 0) -> dict:
     """Probability that blue wins, from players and histories. Shared by played and live prediction."""
     check_bundle(bundle)
-    table, roles = features_for_game(game_id, start_ts, players, histories, blue_win)
+    table, roles = features_for_game(game_id, start_ts, players, histories, blue_win,
+                                     pool=bundle["pool"], champion_positions=bundle["champion_positions"])
     missing = [f for f in bundle["features"] if f not in table.columns]
     if missing:
         raise ValueError(f"El modelo guardado usa variables que ya no existen: {missing}. Vuelve a entrenar con --train.")
@@ -169,11 +200,9 @@ def score_game(game_id: str, start_ts: int, players: list[dict], histories: dict
                                           if all(game["remake"] for game in histories.get(p["key"], [])))}
 
 
-def in_training_data(match_id: str, start_ts: int, bundle: dict) -> bool:
-    """True if the model was fitted on this match (or, for an old bundle, may have been)."""
-    if "match_ids" in bundle:
-        return match_id in bundle["match_ids"]
-    return start_ts <= bundle["last_match_ts"]
+def in_training_data(match_id: str, bundle: dict) -> bool:
+    """True if the model was fitted on this match."""
+    return match_id in bundle["match_ids"]
 
 
 def predict_match(match_id: str, bundle: dict) -> dict:
@@ -191,7 +220,7 @@ def predict_match(match_id: str, bundle: dict) -> dict:
     blue_win = match_fetcher.summarize(match)["blue_win"]
     result = score_game(match_id, start, players_from_match(match), histories, bundle, blue_win)
     return {"match_id": match_id, **result, "blue_win": blue_win,
-            "en_entrenamiento": in_training_data(match_id, start, bundle)}
+            "en_entrenamiento": in_training_data(match_id, bundle)}
 
 
 # --- Live games ---------------------------------------------------------------------------
@@ -332,45 +361,263 @@ def score_log(log_path: Path | None = None, get_match=None, bundle: dict | None 
             "auc": float(roc_auc_score(y, p)) if both else None}
 
 
-def evaluate_new(bundle: dict, table: pd.DataFrame) -> dict:
-    """Frozen-model test: score only matches NOT in bundle["match_ids"]. The model is never refitted."""
-    check_bundle(bundle)
-    missing = [f for f in bundle["features"] if f not in table.columns]
-    if missing:
-        raise ValueError(f"El modelo guardado usa variables que ya no existen: {missing}. Vuelve a entrenar con --train.")
-    new = table[~table["match_id"].astype(str).isin(set(bundle["match_ids"]))]
-    # "New" must also mean played after training ended, or it is not a forward test.
-    before = new["game_start_ts"] <= bundle["last_match_ts"]
-    excluded = int(before.sum())
-    new = new[~before].sort_values("game_start_ts", kind="stable")
-    if new.empty:
-        return {"n": 0}
-    y = new["blue_win"].to_numpy()
-    proba = np.clip(bundle["model"].predict_proba(new[bundle["features"]])[:, 1], 1e-6, 1 - 1e-6)
+# --- Development set, freeze and forward test ------------------------------------------------
+
+
+class PredictError(Exception):
+    """A clear, expected reason why a command cannot run (shown as is, no traceback)."""
+
+
+def _read_export(export_dir: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    export_dir = Path(export_dir)
+    matches = pd.read_csv(export_dir / "matches.csv", dtype={"patch": str})
+    return matches, pd.read_csv(export_dir / "player_history.csv")
+
+
+def _pool_and_shares(history: pd.DataFrame, match_ids) -> tuple[pd.DataFrame, dict]:
+    """Pool and role shares made ONLY from the history windows of `match_ids`."""
+    pool = champion_pool.build_pool(history[history["target_match_id"].isin(set(match_ids))])
+    return pool, champion_pool.champion_position_shares(pool)
+
+
+def _table_for(export_dir: Path, pool: pd.DataFrame, shares: dict) -> pd.DataFrame:
+    return build.build(export_dir, inferred_positions=True, pool=pool, champion_positions=shares, final_features=True)
+
+
+def freeze(export_dir: Path = build.EXPORT_DIR, models_dir: Path = MODELS_DIR) -> dict:
+    """Run once. Keep the saved 22-variable model as the base, fit the candidate on the same matches.
+
+    Everything is checked before anything is written. Reads data/export, writes only to models_dir.
+    """
+    export_dir, models_dir = Path(export_dir), Path(models_dir)
+    candidate_path, final_path, base_path = (models_dir / CANDIDATE_NAME, models_dir / "modelo_final.joblib",
+                                             models_dir / BASE_NAME)
+    if candidate_path.exists():
+        raise PredictError(f"Ya existe {candidate_path}: --freeze solo se ejecuta una vez (la prueba debe seguir "
+                           "siendo la misma). Para empezar de cero hay que borrar el candidato Y restaurar el modelo base "
+                           f"({base_path.name}) como {final_path.name}, a mano.")
+    try:
+        base = load_model(final_path)
+    except FileNotFoundError as error:
+        raise PredictError(str(error))
+    if (base.get("version") is not None or len(base.get("features", [])) != BASE_FEATURE_COUNT
+            or len(base.get("match_ids", [])) != BASE_MATCH_COUNT):
+        raise PredictError(f"{final_path} no es el modelo de {BASE_FEATURE_COUNT} variables entrenado con "
+                           f"{BASE_MATCH_COUNT} partidas: no se congela nada.")
+    fitted_ids = {str(i) for i in base["match_ids"]}
+    matches, history = _read_export(export_dir)
+    development = sorted(matches.loc[matches["status"] == "history_done", "match_id"].astype(str))
+    if len(development) != DEVELOPMENT_COUNT or not fitted_ids <= set(development):
+        raise PredictError(f"El conjunto de desarrollo debe tener exactamente {DEVELOPMENT_COUNT} partidas "
+                           f"history_done e incluir las {BASE_MATCH_COUNT} del modelo base; hay {len(development)} "
+                           f"y {len(fitted_ids - set(development))} de las {BASE_MATCH_COUNT} no están. "
+                           "El export cambió: no se congela.")
+    if base_path.exists() and not filecmp.cmp(final_path, base_path, shallow=False):
+        raise PredictError(f"{base_path} ya existe y es distinto de {final_path}: no se sobrescribe.")
+    models_dir.mkdir(parents=True, exist_ok=True)
+    if not base_path.exists():
+        shutil.copyfile(final_path, base_path)
+    if not filecmp.cmp(final_path, base_path, shallow=False):
+        raise PredictError("La copia del modelo base no coincide byte a byte; no se continúa.")
+
+    pool, shares = _pool_and_shares(history, fitted_ids)
+    table = _table_for(export_dir, pool, shares)
+    fit_table = table[table["match_id"].astype(str).isin(fitted_ids)]
+    if len(fit_table) != len(fitted_ids):
+        raise PredictError("No se pudo construir la tabla de las partidas de ajuste; no se congela.")
+    bundle = fit_final_model(fit_table, pool, shares, development_ids=development)
+    save_model(bundle, candidate_path)
+    save_model(bundle, final_path)
+    with open(models_dir / DEVELOPMENT_NAME, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["match_id", "uso"])
+        writer.writerows((i, "ajuste" if i in fitted_ids else "seleccion") for i in development)
+    return bundle
+
+
+def _metrics(y, proba) -> dict:
+    proba = np.clip(np.asarray(proba, dtype=float), 1e-6, 1 - 1e-6)
     pred = (proba >= 0.5).astype(int)
-    two_classes = len(np.unique(y)) == 2
-    constant = np.full(len(y), np.clip(bundle["blue_win_rate"], 1e-6, 1 - 1e-6))
-    day = lambda ts: datetime.fromtimestamp(ts / 1000, timezone.utc).strftime("%Y-%m-%d")
-    return {
-        "n": int(len(new)), "excluidas_por_fecha": excluded,
-        "por_tier": {str(k): int(v) for k, v in new["seed_tier"].value_counts().sort_index().items()},
-        "desde": day(new["game_start_ts"].min()), "hasta": day(new["game_start_ts"].max()),
-        "accuracy": float(accuracy_score(y, pred)), "accuracy_ic95": train.bootstrap_accuracy_ci(y, pred),
-        "auc": float(roc_auc_score(y, proba)) if two_classes else None,
-        "auc_ic95": train.bootstrap_auc_ci(y, proba) if two_classes else None,
-        "log_loss": float(log_loss(y, proba, labels=[0, 1])),
-        "base_accuracy": float(np.mean(y == bundle["majority_blue_win"])),
-        "base_log_loss": float(log_loss(y, constant, labels=[0, 1])),
+    spread = len(np.unique(y)) == 2 and len(np.unique(proba)) > 1
+    return {"accuracy": float(accuracy_score(y, pred)), "accuracy_ic95": train.bootstrap_accuracy_ci(y, pred),
+            "auc": float(roc_auc_score(y, proba)) if spread else None,
+            "auc_ic95": train.bootstrap_auc_ci(y, proba) if spread else None,
+            "log_loss": float(log_loss(y, proba, labels=[0, 1]))}
+
+
+def evaluate_new(base: dict, candidate: dict, base_table: pd.DataFrame, candidate_table: pd.DataFrame) -> dict:
+    """Forward test of the frozen candidate against the saved base. Nothing is refitted.
+
+    Test set: matches that are not in candidate["development_ids"] and were played after the last match
+    the models were fitted on. Both tables must contain the same matches; the base table is built with
+    inferred roles but WITHOUT the champion, exactly as the base was trained.
+    """
+    check_bundle(candidate)
+    if base.get("roles") != "inferred":
+        raise ValueError("El modelo base debe usar posiciones inferidas.")
+    development = set(candidate["development_ids"])
+    cutoff = candidate["last_match_ts"]
+    ids = candidate_table["match_id"].astype(str)
+    in_development = ids.isin(development)
+    too_early = ~in_development & (candidate_table["game_start_ts"] <= cutoff)
+    result = {"n": 0, "excluidas_desarrollo": int(in_development.sum()), "excluidas_por_fecha": int(too_early.sum())}
+    test = candidate_table[~in_development & ~too_early].sort_values(["game_start_ts", "match_id"], kind="stable")
+    if test.empty:
+        return result
+    test_ids = test["match_id"].astype(str)
+    if not set(test_ids) <= set(base_table["match_id"].astype(str)):
+        raise ValueError("Las tablas del modelo base y del candidato no tienen las mismas partidas.")
+    base_test = base_table.set_index(base_table["match_id"].astype(str)).loc[test_ids]
+    if (base_test["blue_win"].to_numpy() != test["blue_win"].to_numpy()).any():
+        raise ValueError("Las tablas del modelo base y del candidato no tienen el mismo resultado en las mismas partidas.")
+    for bundle, table in ((base, base_test), (candidate, test), (candidate["sensibilidad"], test)):
+        missing = [f for f in bundle["features"] if f not in table.columns]
+        if missing:
+            raise ValueError(f"Faltan variables en la tabla de prueba: {missing}")
+    y = test["blue_win"].to_numpy()
+    proba = {
+        "base": base["model"].predict_proba(base_test[base["features"]])[:, 1],
+        "candidato": candidate["model"].predict_proba(test[candidate["features"]])[:, 1],
+        "nueve": candidate["sensibilidad"]["model"].predict_proba(test[candidate["sensibilidad"]["features"]])[:, 1],
+        "constante": np.full(len(y), candidate["blue_win_rate"]),
     }
+    models = {name: _metrics(y, p) for name, p in proba.items()}
+    day = lambda ts: datetime.fromtimestamp(ts / 1000, timezone.utc).strftime("%Y-%m-%d")
+    differences = {
+        "log_loss": train.paired_log_loss_difference(y, proba["base"], proba["candidato"]),
+        "auc": (train.paired_auc_difference(y, proba["candidato"], proba["base"]) if len(np.unique(y)) == 2
+                else {"diferencia": None, "ic95": None}),  # one class only: no AUC to compare
+        "accuracy": train.paired_accuracy_difference(y, proba["candidato"], proba["base"]),
+        "log_loss_nueve": train.paired_log_loss_difference(y, proba["base"], proba["nueve"]),
+    }
+    low, high = differences["log_loss"]["ic95"]
+    if low > 0:
+        verdict = (f"El candidato es mejor que el modelo base: la pérdida logarítmica baja {differences['log_loss']['diferencia']:.4f} "
+                   f"(IC 95 %: {low:.4f} a {high:.4f}), por encima de 0.")
+    else:
+        verdict = (f"No se demuestra que el candidato sea mejor que el modelo base: la diferencia de pérdida logarítmica es "
+                   f"{differences['log_loss']['diferencia']:+.4f} (IC 95 %: {low:+.4f} a {high:+.4f}) y el intervalo no queda por encima de 0.")
+    result.update({
+        "n": int(len(test)), "desde": day(test["game_start_ts"].min()), "hasta": day(test["game_start_ts"].max()),
+        "por_tier": {str(k): int(v) for k, v in test["seed_tier"].value_counts().sort_index().items()},
+        "modelos": models, "diferencias": differences, "veredicto": verdict,
+        "poca_potencia": bool(len(test) < LOW_POWER_N), "mejor": bool(low > 0),
+    })
+    return result
+
+
+def _read_test_runs(models_dir: Path) -> list:
+    path = Path(models_dir) / TEST_RESULT_NAME
+    if not path.exists():
+        return []
+    return json.loads(path.read_text(encoding="utf-8")).get("runs", [])
+
+
+def record_test_run(result: dict, models_dir: Path = MODELS_DIR) -> int:
+    """Append this run to prueba_final.json and return how many runs there were before it."""
+    runs = _read_test_runs(models_dir)
+    keep = ("n", "desde", "hasta", "por_tier", "excluidas_desarrollo", "excluidas_por_fecha", "modelos",
+            "diferencias", "veredicto")
+    runs.append({"fecha": datetime.now(timezone.utc).isoformat(timespec="seconds"), **{k: result[k] for k in keep}})
+    path = Path(models_dir) / TEST_RESULT_NAME
+    path.write_text(json.dumps({"runs": runs}, indent=2, ensure_ascii=False), encoding="utf-8")
+    return len(runs) - 1
+
+
+def evaluate_new_command(export_dir: Path = build.EXPORT_DIR, models_dir: Path = MODELS_DIR, out=print) -> dict:
+    """Load base and candidate (never modelo_final), build both tables, test, print and record."""
+    export_dir, models_dir = Path(export_dir), Path(models_dir)
+    try:
+        base = load_model(models_dir / BASE_NAME)
+        candidate = load_model(models_dir / CANDIDATE_NAME)
+        check_bundle(candidate)
+    except (FileNotFoundError, ValueError) as error:
+        raise PredictError(str(error))
+    try:
+        base_table = build.build(export_dir, inferred_positions=True)
+        candidate_table = _table_for(export_dir, candidate["pool"], candidate["champion_positions"])
+    except FileNotFoundError as error:
+        raise PredictError(str(error))
+    r = evaluate_new(base, candidate, base_table, candidate_table)
+    out(f"Excluidas {r['excluidas_desarrollo']} partidas del conjunto de desarrollo (ya se usaron para elegir las variables) "
+        f"y {r['excluidas_por_fecha']} jugadas antes de que terminara el ajuste.")
+    if r["n"] == 0:
+        out("0 partidas de prueba (fuera del conjunto de desarrollo y posteriores al ajuste). Recolecta más datos, "
+            "vuelve a exportar cuando la recolección haya terminado (ver README) y repite. No se escribió nada.")
+        return r
+    out(f"n = {r['n']} partidas de prueba, del {r['desde']} al {r['hasta']}")
+    out("Por liga: " + ", ".join(f"{t} {n}" for t, n in r["por_tier"].items()))
+    if r["poca_potencia"]:
+        out(f"AVISO: con menos de {LOW_POWER_N} partidas la comparación tiene poca potencia: una diferencia real "
+            "pequeña puede no verse.")
+    names = {"base": f"Base ({len(base['features'])} variables)", "candidato": f"Candidato ({len(candidate['features'])} variables)",
+             "nueve": "Sensibilidad (9 variables)", "constante": "Constante (tasa del entrenamiento)"}
+    for key, label in names.items():
+        m = r["modelos"][key]
+        a_low, a_high = m["accuracy_ic95"]
+        auc = ("ROC AUC no calculable" if m["auc"] is None else
+               f"ROC AUC {m['auc']:.3f} ({m['auc_ic95'][0]:.3f} a {m['auc_ic95'][1]:.3f})")
+        out(f"{label}: accuracy {m['accuracy']:.1%} ({a_low:.1%} a {a_high:.1%}); {auc}; log loss {m['log_loss']:.4f}")
+    d = r["diferencias"]
+    out("Diferencias emparejadas, candidato frente a base (positivo = mejor el candidato):")
+    out(f"  log loss: {d['log_loss']['diferencia']:+.4f} (IC 95 %: {d['log_loss']['ic95'][0]:+.4f} a {d['log_loss']['ic95'][1]:+.4f})")
+    if d["auc"]["diferencia"] is None:
+        out("  ROC AUC: no calculable (todas las partidas de prueba tienen el mismo resultado)")
+    else:
+        out(f"  ROC AUC: {d['auc']['diferencia']:+.4f} (IC 95 %: {d['auc']['ic95'][0]:+.4f} a {d['auc']['ic95'][1]:+.4f})")
+    out(f"  accuracy: {d['accuracy']['diferencia']:+.4f} (IC 95 %: {d['accuracy']['ic95'][0]:+.4f} a {d['accuracy']['ic95'][1]:+.4f})")
+    out(f"Sensibilidad (9 variables frente a base), log loss: {d['log_loss_nueve']['diferencia']:+.4f} "
+        f"(IC 95 %: {d['log_loss_nueve']['ic95'][0]:+.4f} a {d['log_loss_nueve']['ic95'][1]:+.4f}); no es una segunda oportunidad.")
+    out(f"Veredicto (criterio fijado antes de la prueba): {r['veredicto']}")
+    earlier = record_test_run(r, models_dir)
+    out(f"Guardado en {models_dir / TEST_RESULT_NAME}. Ejecuciones anteriores de esta prueba: {earlier}"
+        + ("; repetirla con los mismos datos no añade evidencia." if earlier else "."))
+    return r
+
+
+def train_command(export_dir: Path = build.EXPORT_DIR, models_dir: Path = MODELS_DIR, force: bool = False,
+                  out=print) -> dict:
+    """Refit on every usable match with a pool from all of them; saves only modelo_final.joblib."""
+    export_dir, models_dir = Path(export_dir), Path(models_dir)
+    if not _read_test_runs(models_dir):
+        if not force:
+            raise PredictError(f"No hay resultado de la prueba ({models_dir / TEST_RESULT_NAME}). Ejecuta antes "
+                               "--evaluate-new; reentrenar antes contaminaría la prueba. (--force lo omite.)")
+        out("ADVERTENCIA: --force sin resultado de la prueba. Reentrenar con todas las partidas CONTAMINA la prueba "
+            "independiente: este modelo ya no se podrá evaluar con las partidas usadas.")
+    try:
+        matches, history = _read_export(export_dir)
+        done = matches.loc[matches["status"] == "history_done", "match_id"].astype(str)
+        pool, shares = _pool_and_shares(history, done)
+        table = _table_for(export_dir, pool, shares)
+    except FileNotFoundError as error:
+        raise PredictError(str(error))
+    candidate_path = models_dir / CANDIDATE_NAME
+    development = load_model(candidate_path)["development_ids"] if candidate_path.exists() else []
+    bundle = fit_final_model(table, pool, shares, development_ids=development)
+    path = save_model(bundle, models_dir / "modelo_final.joblib")
+    low, high = bundle["auc_ic95"]
+    out(f"Modelo guardado en {path}")
+    out(f"{bundle['n_matches']} partidas, {len(bundle['features'])} variables, {bundle['best_params']}, posiciones inferidas")
+    out(f"ROC AUC en validación temporal: {bundle['auc_temporal']:.3f} (IC 95 %: {low:.3f} a {high:.3f})")
+    return bundle
 
 
 # --- Commands -----------------------------------------------------------------------------
 
 
-def _weak_signal_warning(bundle: dict) -> str:
+def _weak_signal_warning(bundle: dict, models_dir: Path = MODELS_DIR) -> str:
     low, high = bundle["auc_ic95"]
-    return ("Aviso: es una señal débil. En validación temporal el modelo tiene ROC AUC "
-            f"{bundle['auc_temporal']:.3f} (IC 95 %: {low:.3f} a {high:.3f}); 0.5 equivale a adivinar.")
+    text = ("Aviso: es una señal débil. En validación temporal el modelo tiene ROC AUC "
+            f"{bundle['auc_temporal']:.3f} (IC 95 %: {low:.3f} a {high:.3f}); 0.5 equivale a adivinar. "
+            "Esa cifra es optimista: las variables se eligieron con esas mismas partidas.")
+    runs = _read_test_runs(models_dir)
+    if not runs:
+        return text + " Todavía no hay una prueba independiente."
+    last = runs[-1]
+    auc = last["modelos"]["candidato"]["auc"]
+    return text + (f" Última prueba independiente del candidato congelado, no de este modelo reentrenado ({last['fecha'][:10]}, n = {last['n']}): "
+                   + (f"ROC AUC {auc:.3f}." if auc is not None else "ROC AUC no calculable."))
 
 
 def _safe_error(error: Exception) -> str:
@@ -388,19 +635,6 @@ def _load_checked() -> dict:
     except (FileNotFoundError, ValueError) as error:
         raise SystemExit(str(error))
     return bundle
-
-
-def _train_command() -> None:
-    try:
-        table = build.build(inferred_positions=True)
-    except FileNotFoundError as error:
-        raise SystemExit(str(error))
-    bundle = fit_final_model(table)
-    path = save_model(bundle)
-    low, high = bundle["auc_ic95"]
-    print(f"Modelo guardado en {path}")
-    print(f"{bundle['n_matches']} partidas, {len(bundle['features'])} variables, {bundle['best_params']}, posiciones inferidas")
-    print(f"ROC AUC en validación temporal: {bundle['auc_temporal']:.3f} (IC 95 %: {low:.3f} a {high:.3f})")
 
 
 def _predict_command(match_id: str) -> None:
@@ -439,7 +673,7 @@ def _live_command(riot_id: str) -> None:
     print(f"Probabilidad de que gane el equipo azul: {result['prob_blue']:.1%}")
     print(f"Probabilidad de que gane el equipo rojo: {result['prob_red']:.1%}")
     print(f"Jugadores sin historial: {result['jugadores_sin_historial']}")
-    print("Posiciones inferidas (hechizos + partidas anteriores); no son las de Riot.")
+    print("Posiciones inferidas (hechizos + campeón + partidas anteriores); no son las de Riot.")
     print(_weak_signal_warning(bundle))
     print("Guardada en data/predictions/live_log.csv." if result["logged"]
           else "Esta partida ya estaba en el registro: no se añadió otra fila.")
@@ -466,60 +700,54 @@ def _score_log_command() -> None:
         print(f"ROC AUC = {r['auc']:.3f}")
 
 
-def _evaluate_new_command() -> None:
-    bundle = _load_checked()
+def _freeze_command() -> None:
+    bundle = _guarded(freeze)
+    low, high = bundle["auc_ic95"]
+    print(f"Congelado el {bundle['trained_at']}.")
+    print(f"Modelo base conservado en {MODELS_DIR / BASE_NAME}; candidato en {MODELS_DIR / CANDIDATE_NAME} "
+          f"(y copiado a {MODEL_PATH.name} hasta el reentrenamiento final).")
+    print(f"Ajuste: {bundle['n_matches']} partidas ({len(bundle['features'])} variables, {bundle['best_params']}); "
+          f"desarrollo: {len(bundle['development_ids'])} partidas; pool: {len(bundle['pool'])} partidas previas; "
+          f"campeones con tabla de posiciones: {len(bundle['champion_positions'])}.")
+    print(f"ROC AUC en validación temporal (optimista): {bundle['auc_temporal']:.3f} (IC 95 %: {low:.3f} a {high:.3f})")
+    print(f"Lista de desarrollo en {MODELS_DIR / DEVELOPMENT_NAME}.")
+
+
+def _guarded(function, *args, **kwargs):
     try:
-        table = build.build(inferred_positions=True)
-    except FileNotFoundError as error:
+        return function(*args, **kwargs)
+    except PredictError as error:
         raise SystemExit(str(error))
-    try:
-        r = evaluate_new(bundle, table)
-    except ValueError as error:
-        raise SystemExit(str(error))
-    if r["n"] == 0:
-        print("0 partidas nuevas (posteriores al fin del entrenamiento y fuera de él). "
-              "Recolecta más datos y vuelve a exportar (ver README).")
-        return
-    a_low, a_high = r["accuracy_ic95"]
-    print(f"Modelo congelado (entrenado el {bundle.get('trained_at', '?')}), sin reajustar.")
-    print(f"n = {r['n']} partidas nuevas, del {r['desde']} al {r['hasta']}")
-    print("Por liga: " + ", ".join(f"{t} {n}" for t, n in r["por_tier"].items()))
-    if r["excluidas_por_fecha"]:
-        print(f"Excluidas {r['excluidas_por_fecha']} partidas no incluidas en el entrenamiento pero jugadas "
-              "antes de que terminara (no son prueba hacia delante).")
-    print(f"Accuracy: {r['accuracy']:.1%} (IC 95 %: {a_low:.1%} a {a_high:.1%})")
-    if r["auc"] is None:
-        print("ROC AUC: no se puede calcular (una sola clase).")
-    else:
-        low, high = r["auc_ic95"]
-        print(f"ROC AUC: {r['auc']:.3f} (IC 95 %: {low:.3f} a {high:.3f})")
-    print(f"Log loss: {r['log_loss']:.3f}")
-    print(f"Siempre la clase mayoritaria del entrenamiento: accuracy {r['base_accuracy']:.1%}, "
-          f"log loss {r['base_log_loss']:.3f}")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train the final model, predict a played or live match, "
-                                                 "or test the frozen model.")
+    parser = argparse.ArgumentParser(description="Freeze, test and train the 10-variable model; predict a played "
+                                                 "or live match.")
     parser.add_argument("match_id", nargs="?", help="e.g. LA1_123456")
-    parser.add_argument("--train", action="store_true", help="fit on data/export and save the model")
+    parser.add_argument("--freeze", action="store_true",
+                        help="once: keep the 22-variable model as base and fit the candidate on its 920 matches")
+    parser.add_argument("--evaluate-new", action="store_true",
+                        help="test the frozen candidate against the base on matches outside the development set")
+    parser.add_argument("--train", action="store_true",
+                        help="refit on every usable match and save modelo_final (after the test)")
+    parser.add_argument("--force", action="store_true", help="with --train: skip the test-result check (contaminates the test)")
     parser.add_argument("--live", metavar="NAME#TAG", help="predict the game this player is in now")
     parser.add_argument("--score-log", action="store_true", help="compare logged live predictions with results")
-    parser.add_argument("--evaluate-new", action="store_true",
-                        help="score the saved model on matches it was not trained on")
     args = parser.parse_args()
-    if args.train:
-        _train_command()
+    if args.freeze:
+        _freeze_command()
+    elif args.train:
+        _guarded(train_command, force=args.force)
     elif args.live:
         _live_command(args.live)
     elif args.score_log:
         _score_log_command()
     elif args.evaluate_new:
-        _evaluate_new_command()
+        _guarded(evaluate_new_command)
     elif args.match_id:
         _predict_command(args.match_id)
     else:
-        parser.error("give a match id, --live, --score-log, --evaluate-new or --train")
+        parser.error("give a match id, --freeze, --evaluate-new, --train, --live or --score-log")
 
 
 if __name__ == "__main__":

@@ -45,11 +45,17 @@ would go over Riot's limit (100 requests / 2 minutes).
     python -m scripts.export_dataset   # database -> data/export/*.csv (anonymized player IDs)
     python -m src.features.build       # -> data/features/partidas.csv, one row per match
     python -m src.models.train         # baselines, logistic regression, random forest + metrics, also per rank band
-    python -m src.models.predict --train          # fit the final model (inferred roles), save data/models/modelo_final.joblib
+    python -m src.models.predict --freeze         # ONCE: keep the 22-variable model as the base, fit the 10-variable candidate
+    python -m src.models.predict --evaluate-new   # frozen candidate vs base on matches collected after the freeze
+    python -m src.models.predict --train          # AFTER the test: refit on every usable match, save modelo_final.joblib
     python -m src.models.predict LA1_123456       # probability that blue won that (already played) match
     python -m src.models.predict --live "Name#TAG"   # a game in progress, before it ends
     python -m src.models.predict --score-log      # logged live predictions vs the real results
-    python -m src.models.predict --evaluate-new   # frozen model vs matches collected after training
+
+**Order of work:** collect more matches (`run_pipeline`), stop collecting, `scripts.export_dataset`,
+`--evaluate-new`, and only then `--train`. `--train` refuses to run if `data/models/prueba_final.json` (the
+test result) does not exist, because refitting on the new matches first would spend the test (`--force`
+skips the check and prints a warning). `--freeze` was run on 2026-11-05 (see NOTES.md); it refuses to run twice.
 
 **Roles.** Riot assigns `teamPosition` after the game and the live endpoint (spectator-v5) gives no
 position. So `src/features/roles.py` infers each team's roles from what is known before the match: the
@@ -59,9 +65,12 @@ one method (`build.build(inferred_positions=True)`, which needs `data/export/par
 `python -m scripts.export_dataset` writes it from the cached match JSON, with no API calls). The default
 `build.build()` still uses Riot's positions, so the notebook and its numbers do not change.
 
-The final model is the logistic regression without the 7 position variables. `--train` needs no Riot
-API key; the prediction commands do. A model saved before this change (Riot positions) is refused with a
-"retrain with --train" message. If the match was part of the training data the command prints a warning,
+The final model is a logistic regression on 10 frozen team-difference variables (`build.FINAL_FEATURES`; the
+three newest are mean recent kills, games in the last 24 hours and the champion-in-position pool win rate).
+The champion played also counts in role inference (a table made from the frozen pool). `--freeze`,
+`--evaluate-new` and `--train` need no Riot API key; the prediction commands do. A model saved before this
+change (22 variables, no pool; it is kept as `modelo_base_22.joblib`) is refused with a
+message telling the user to run `--freeze` first and `--train` after the test. If the match was part of the training data the command prints a warning,
 because that probability is in-sample. The signal is weak (see NOTES.md).
 
 **`--live` limits.** The player must be in a ranked solo/duo game (queue 420) that has started loading;
@@ -72,8 +81,12 @@ game adds one row to `data/predictions/live_log.csv` (a game predicted twice is 
 games of both outcomes, the ROC AUC. **Do not run collection (`run_pipeline`) and `--live` at the same
 time**: each process has its own rate limiter, so together they go over Riot's limit.
 
-**`--evaluate-new`** loads the saved model WITHOUT refitting and scores only matches that are not in its
-training set (`bundle["match_ids"]`): the independent test of a frozen model. With no new matches it says so.
+**`--evaluate-new`** loads `modelo_base_22.joblib` and `modelo_candidato.joblib` WITHOUT refitting (it never reads
+`modelo_final.joblib`) and scores only matches that are not in the 1,206 development matches and were played after
+the last fitted one. It prints base, candidate, a 9-variable sensitivity model and a constant, the paired
+differences (log loss, AUC, accuracy) and a plain verdict: the candidate is better only if the 95 % interval of
+(base minus candidate) log loss is above 0. Each run is appended to `data/models/prueba_final.json`; with no
+new matches it says so and writes nothing. Repeating it on the same data adds no evidence.
 
 ## Collecting more data
 
@@ -90,7 +103,9 @@ per player spreads them over the period. `--limit` caps `fetch`, `history` and `
     .venv/bin/python -m scripts.export_dataset
         # 4. database -> CSV files, including participant_spells.csv; new matches sort after the old ones
     .venv/bin/python -m src.models.predict --evaluate-new
-        # 5. test the frozen model on the new matches
+        # 5. test the frozen candidate on the new matches (do not repeat step 4 once collection restarts)
+    .venv/bin/python -m src.models.predict --train
+        # 6. only after the test: refit on every usable match
 
 Measured cost (an estimate from the first collection): about 64 calls and 1.3 minutes per match, so 300
 matches take about 6.5 hours and 1,000 about 22 hours. Run it as the only process using the API key.
@@ -121,8 +136,9 @@ matches take about 6.5 hours and 1,000 about 22 hours. Run it as the only proces
 - [x] Model training (first version: weak signal, see NOTES.md)
 - [x] Sensitivity check on the position variables (see NOTES.md)
 - [x] Final model + `predict` command for played matches, per-tier check (see NOTES.md)
-- [x] Role inference from spells + history; live prediction (`--live`), live log, `--score-log`, `--evaluate-new`
-- [ ] More data: a longer period, especially for the test set (recipe above; then `--evaluate-new`)
+- [x] Role inference from spells + champion + history; live prediction (`--live`), live log, `--score-log`
+- [x] Frozen 10-variable candidate (`--freeze`, 2026-11-05) and the forward test (`--evaluate-new`)
+- [ ] More data: the matches for the forward test (recipe above; then `--evaluate-new`, then `--train`)
 - [ ] Forward test: run `--live` on real games, then `--score-log`
 
 ---

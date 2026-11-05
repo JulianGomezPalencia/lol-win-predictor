@@ -94,6 +94,8 @@ def bootstrap_auc_ci(y: np.ndarray, proba: np.ndarray, n_boot: int = 2000, seed:
         idx = rng.integers(0, len(y), len(y))
         if len(np.unique(y[idx])) == 2:  # a resample with one class only has no AUC
             values.append(roc_auc_score(y[idx], proba[idx]))
+    if not values:
+        raise ValueError("Se necesitan las dos clases para calcular el intervalo del ROC AUC.")
     low, high = np.percentile(values, [2.5, 97.5])
     return float(low), float(high)
 
@@ -123,9 +125,25 @@ def paired_auc_difference(y, proba_a, proba_b, n_boot: int = 2000, seed: int = S
         idx = rng.integers(0, len(y), len(y))
         if len(np.unique(y[idx])) == 2:  # a resample with one class only has no AUC
             samples.append(roc_auc_score(y[idx], proba_a[idx]) - roc_auc_score(y[idx], proba_b[idx]))
+    if len(np.unique(y)) < 2 or not samples:
+        raise ValueError("Se necesitan las dos clases para calcular la diferencia de ROC AUC.")
     low, high = np.percentile(samples, [2.5, 97.5])
     return {"diferencia": float(roc_auc_score(y, proba_a) - roc_auc_score(y, proba_b)),
             "ic95": (float(low), float(high))}
+
+
+def paired_log_loss_difference(y, proba_base, proba_new, n_boot: int = 2000, seed: int = SEED) -> dict:
+    """Log loss of the base minus the new model on the SAME matches (positive = the new one is better),
+    with a paired bootstrap interval: the matches are resampled once and both losses recomputed."""
+    y = np.asarray(y)
+    base = np.clip(np.asarray(proba_base, dtype=float), 1e-6, 1 - 1e-6)
+    new = np.clip(np.asarray(proba_new, dtype=float), 1e-6, 1 - 1e-6)
+    loss = lambda p: -(y * np.log(p) + (1 - y) * np.log(1 - p))
+    diff = loss(base) - loss(new)
+    rng = np.random.default_rng(seed)
+    samples = rng.choice(diff, size=(n_boot, len(diff)), replace=True).mean(axis=1)
+    low, high = np.percentile(samples, [2.5, 97.5])
+    return {"diferencia": float(diff.mean()), "ic95": (float(low), float(high))}
 
 
 def evaluate(y: pd.Series, proba: np.ndarray) -> dict:

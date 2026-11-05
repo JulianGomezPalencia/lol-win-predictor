@@ -57,3 +57,43 @@ def test_fewer_than_five_players():
 def test_blank_and_unknown_history_entries_are_ignored():
     p = [player("a", history=["", "", "Invalid"])]
     assert roles.infer_positions(p)["a"] in POS
+
+
+# --- champion in role inference ---------------------------------------------------------------
+
+PYKE, RIVEN = 555, 266
+TABLE = {PYKE: {"UTILITY": 0.9, "JUNGLE": 0.1}, RIVEN: {"TOP": 0.95, "MIDDLE": 0.05}}
+
+
+def swap_team(first, second):
+    """Riven and Pyke have no history; three other players fill JUNGLE, MIDDLE and BOTTOM."""
+    return [{**player(first, history=()), "champion_id": RIVEN}, {**player(second, history=()), "champion_id": PYKE},
+            player("jg", spells=(11, 4), history=["JUNGLE"] * 6), player("mid", history=["MIDDLE"] * 6),
+            player("adc", history=["BOTTOM"] * 6)]
+
+
+def test_no_table_or_unknown_champions_give_the_old_result_exactly():
+    team = team_with_history()
+    old = roles.infer_positions(team)
+    assert roles.infer_positions(team, None) == old and roles.infer_positions(team, {}) == old
+    with_ids = [{**p, "champion_id": 99} for p in team]
+    assert roles.infer_positions(with_ids, TABLE) == old  # champion 99 is not in the table
+
+
+def test_champion_table_fixes_a_pyke_riven_swap_for_players_without_history():
+    ok = []
+    for first, second in (("a", "b"), ("b", "a")):  # swap which key comes first
+        ok.append(roles.infer_positions(swap_team(first, second))[first] == "TOP")
+        fixed = roles.infer_positions(swap_team(first, second), TABLE)
+        assert fixed[first] == "TOP" and fixed[second] == "UTILITY"
+    assert not all(ok)  # without the table the tie is broken by order, so one of the two orders is wrong
+
+
+def test_smite_still_wins_jungle_with_a_champion_table_and_it_stays_one_to_one_and_deterministic():
+    team = swap_team("a", "b")
+    team[2]["champion_id"] = RIVEN  # the Smite player plays a champion usually seen in TOP
+    team[0]["champion_id"] = PYKE
+    result = roles.infer_positions(team, TABLE)
+    assert result["jg"] == "JUNGLE"
+    assert sorted(result.values()) == sorted(POS)
+    assert result == roles.infer_positions(team, TABLE)
