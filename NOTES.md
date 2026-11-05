@@ -133,9 +133,40 @@ in any single band. The conclusion that the bands cannot be separated still hold
 The final model (`python -m src.models.predict --train`, saved in `data/models/`) uses the 22
 variables without position (15 of them are still lane-against-lane and use the post-game `team_position` to
 pair opponents); temporal ROC AUC 0.549 (0.507–0.588). It scores played matches only:
-live prediction is not built (the spectator endpoint gives no positions). The model is fitted on all
+live prediction was built afterwards, see the next section. The model is fitted on all
 920 matches, so predicting one of them is in-sample (AUC 0.608 on its own training rows vs 0.549
 walk-forward); the command warns when the match is in the training data.
+
+## Inferred roles and live prediction (2026-11-04)
+
+Riot's `teamPosition` is assigned after the game, and the live endpoint has no position. `src/features/roles.py`
+infers roles before the game from summoner spells (Smite = jungle) and the player's earlier positions
+(one-to-one assignment, `scipy.optimize.linear_sum_assignment`). The model is retrained on the same inferred
+roles (`build.build(inferred_positions=True)`).
+
+**Role accuracy against Riot's `teamPosition`** (920 matches, 9,200 players): overall 81.9 %.
+JUNGLE 100.0 %, UTILITY 80.6 %, BOTTOM 77.9 %, TOP 76.8 %, MIDDLE 73.9 %. All five roles of a team are right
+in 60.9 % of the team-matches. JUNGLE is exact because Smite is in every jungler's spell set in this data.
+
+**Walk-forward logistic regression, 22 variables, same 765 matches in both runs:**
+
+| Roles | Accuracy (95 % CI) | ROC AUC (95 % CI) |
+|---|---|---|
+| Riot's (post-game) | 54.6 % (51.1–58.0) | 0.549 (0.507–0.588) |
+| Inferred (pre-game) | 54.2 % (50.7–57.6) | 0.546 (0.505–0.585) |
+
+Paired AUC difference (inferred minus Riot): -0.003 (95 % CI -0.018 to +0.012). The data cannot tell the two apart.
+
+**Reading.** The model with inferred roles is the first version free of the post-game position issue, and its
+AUC is practically unchanged. The signal is still weak: the interval includes values barely above 0.5. We did not
+tune anything to recover the AUC. The saved model (`data/models/modelo_final.joblib`) is now this one; the previous
+file (Riot positions) is kept as `data/models/modelo_final_posiciones_riot.joblib`.
+
+`--evaluate-new` on the real data: 0 new matches (as expected: all 920 exported matches are in training). The
+independent test needs the collection recipe in the README. Smoke test: one recent ranked match outside the
+training data, predicted end to end with the real API (about 110 calls): 39.2 % blue, red won, no player
+without history. One match says nothing about accuracy. `--live` was not run against a real player (needs someone
+in a game); it is covered by tests with fake endpoints.
 
 ## Ideas
 

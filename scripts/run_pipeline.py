@@ -3,7 +3,8 @@ Run the whole data-collection pipeline, agent by agent.
 
     python -m scripts.run_pipeline --steps seed,discover  # once: build the dataset's player + match list
     python -m scripts.run_pipeline                        # process it: fetch, history, snapshot
-    python -m scripts.run_pipeline --limit 20             # cap the slow steps (history, snapshot)
+    python -m scripts.run_pipeline --limit 20             # cap the slow steps (fetch, history, snapshot)
+    python -m scripts.run_pipeline --steps discover --matches-per-player 15 --days-back 14
 
 The default (fetch, history, snapshot) only picks up work that's still left (the `status`
 column of target_matches, or players without a snapshot). So if anything stops the run —
@@ -34,7 +35,12 @@ def main():
     parser = argparse.ArgumentParser(description="Run the LoL data-collection pipeline.")
     parser.add_argument("--steps", default=",".join(DEFAULT_STEPS),
                         help=f"comma-separated steps from {','.join(STEPS)} (default: {','.join(DEFAULT_STEPS)})")
-    parser.add_argument("--limit", type=int, help="max target matches (history) / players (snapshot) this run")
+    parser.add_argument("--limit", type=int,
+                        help="max target matches (fetch, history) / players (snapshot) this run")
+    parser.add_argument("--matches-per-player", type=int, default=5,
+                        help="discover: newest ranked matches asked per player (default 5)")
+    parser.add_argument("--days-back", type=int, default=14,
+                        help="discover: only matches from the last N days (default 14)")
     args = parser.parse_args()
 
     steps = [step.strip() for step in args.steps.split(",")]
@@ -51,9 +57,11 @@ def main():
             if step == "seed":
                 print(f"Saved {seeder.seed(conn)} players.")
             elif step == "discover":
-                print(f"{match_discovery.discover(conn)} new matches.")
+                new = match_discovery.discover(conn, matches_per_player=args.matches_per_player,
+                                               days_back=args.days_back)
+                print(f"{new} new matches.")
             elif step == "fetch":
-                print("Fetched:", match_fetcher.fetch_pending(conn))
+                print("Fetched:", match_fetcher.fetch_pending(conn, limit=args.limit))
             elif step == "history":
                 print(f"{history_builder.build_histories(conn, limit=args.limit)} matches completed.")
             elif step == "snapshot":

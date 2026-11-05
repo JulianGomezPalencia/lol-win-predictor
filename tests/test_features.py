@@ -133,3 +133,68 @@ def test_usual_lane_tie_goes_to_the_most_recent_lane():
     assert build._usual_position(pd.Series(["UTILITY", "TOP", "UTILITY", "TOP"])) == "UTILITY"
     assert build._usual_position(pd.Series(["TOP", "", "UTILITY", "UTILITY"])) == "UTILITY"
     assert math.isnan(build._usual_position(pd.Series(["", None])))
+
+
+# --- inferred positions -------------------------------------------------------------------
+
+
+def make_spells(smite_player="100_JUNGLE"):
+    rows = []
+    for team in (BLUE, RED):
+        for pos in POSITIONS:
+            p = f"{team}_{pos}"
+            rows.append({"match_id": "M1", "player_id": p, "spell1_id": 11 if p == smite_player else 4, "spell2_id": 14})
+    return pd.DataFrame(rows)
+
+
+def positional_history(extra=()):
+    rows = []
+    for team in (BLUE, RED):
+        for pos in POSITIONS:
+            p = f"{team}_{pos}"
+            rows += [game(p, 0, 1, position=pos, days_before=1), game(p, 1, 0, position=pos, days_before=2)]
+    return pd.DataFrame(rows + list(extra))
+
+
+def inferred(participants, history, spells=None):
+    return build.inferred_participants(participants, history, make_matches(),
+                                       make_spells() if spells is None else spells)
+
+
+def test_inferred_positions_recover_history_roles():
+    result = inferred(make_participants().assign(team_position=""), positional_history())
+    assert (result["team_position"].values == [p.split("_")[1] for p in result["player_id"]]).all()
+
+
+def test_inferred_mode_ignores_riot_team_position():
+    history = positional_history()
+    base = inferred(make_participants(), history)
+    shuffled = make_participants().sample(frac=1, random_state=0).reset_index(drop=True)
+    shuffled["team_position"] = shuffled["team_position"].sample(frac=1, random_state=1).to_numpy()
+    wrong = make_participants().assign(team_position="TOP")
+    pd.testing.assert_series_equal(
+        base.set_index("player_id")["team_position"].sort_index(),
+        inferred(shuffled, history).set_index("player_id")["team_position"].sort_index())
+    feats = lambda parts: build.match_features(build.player_features(history, parts, make_matches()), make_matches())
+    pd.testing.assert_frame_equal(feats(base), feats(inferred(shuffled, history)))
+    pd.testing.assert_frame_equal(feats(base), feats(inferred(wrong, history)))
+
+
+def test_history_at_or_after_match_start_does_not_change_inferred_roles():
+    base = inferred(make_participants(), positional_history())
+    late = [game("100_TOP", 5 + i, 1, position="UTILITY", days_before=-i) for i in range(0, 4)]  # start >= START
+    late.append({**game("100_TOP", 9, 1, position="UTILITY", days_before=1), "remake": 1})      # remake
+    changed = inferred(make_participants(), positional_history(late))
+    assert (changed["team_position"].values == base["team_position"].values).all()
+
+
+def test_build_inferred_needs_the_spells_csv(tmp_path):
+    for name, frame in (("matches", make_matches()), ("participants", make_participants()), ("player_history", make_history())):
+        frame.to_csv(tmp_path / f"{name}.csv", index=False)
+    with pytest.raises(FileNotFoundError, match="export_dataset"):
+        build.build(tmp_path, inferred_positions=True)
+    default = build.build(tmp_path)  # default mode works without the new file and uses Riot's positions
+    assert len(default) == 1
+    make_spells().to_csv(tmp_path / "participant_spells.csv", index=False)
+    inferred_table = build.build(tmp_path, inferred_positions=True)
+    assert list(inferred_table.columns) == list(default.columns) and len(inferred_table) == 1

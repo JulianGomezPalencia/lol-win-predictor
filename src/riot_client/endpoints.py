@@ -73,3 +73,17 @@ def is_firewall_blocked(puuid: str) -> bool:
     reason) must stop the run, not be mistaken for "this player has no games".
     """
     return "--" in puuid
+
+
+def get_active_game(puuid: str) -> dict | None:
+    """The live game the player is in (spectator-v5, platform host), or None if not in a game (404).
+
+    Any other error (403 expired key, 429, 5xx) is raised. The answer has each player's puuid
+    (may be missing when hidden), team, champion and summoner spells, but no position.
+    """
+    try:
+        return get(f"{PLATFORM_URL}/lol/spectator/v5/active-games/by-summoner/{puuid}")
+    except requests.HTTPError as error:
+        if is_not_found(error):
+            return None
+        raise

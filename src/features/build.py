@@ -24,6 +24,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from src.features import roles
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 EXPORT_DIR = PROJECT_ROOT / "data" / "export"
 FEATURES_PATH = PROJECT_ROOT / "data" / "features" / "partidas.csv"
@@ -136,11 +138,51 @@ def feature_columns(df: pd.DataFrame) -> list[str]:
     return [c for c in df.columns if c.startswith("dif_") or "_dif_" in c]
 
 
-def build(export_dir: Path = EXPORT_DIR) -> pd.DataFrame:
-    """Read the exported CSVs and return the match-level feature table."""
+def inferred_participants(participants: pd.DataFrame, history: pd.DataFrame, matches: pd.DataFrame,
+                          spells: pd.DataFrame) -> pd.DataFrame:
+    """Copy of `participants` whose team_position is INFERRED before the match, not Riot's value.
+
+    Uses only the summoner spells and the player's positions in games strictly before the match
+    (remakes and blanks ignored). Riot's team_position is never read, so the result cannot depend
+    on how the match went. Matches without a status of history_done are left with an empty position.
+    """
+    start = matches.set_index("match_id")["game_start_ts"]
+    h = history[(history["remake"] == 0) & history["target_match_id"].isin(start.index)]
+    h = h[h["game_start_ts"] < h["target_match_id"].map(start)]  # strictly before the match
+    h = h[h["team_position"].isin(POSITIONS)].sort_values(["target_match_id", "player_id", "history_rank"])
+    past = {key: list(g) for key, g in h.groupby(["target_match_id", "player_id"])["team_position"]}
+    picked = {(m, p): tuple(int(x) for x in (a, b) if pd.notna(x))
+              for m, p, a, b in zip(spells["match_id"], spells["player_id"],
+                                    spells["spell1_id"], spells["spell2_id"])}
+    result = participants.copy()
+    result["team_position"] = ""
+    for (match_id, _team), group in participants.groupby(["match_id", "team_id"]):
+        team = [{"key": player, "spell_ids": picked.get((match_id, player), ()),
+                 "history_positions": past.get((match_id, player), [])}
+                for player in group["player_id"]]
+        assigned = roles.infer_positions(team)
+        result.loc[group.index, "team_position"] = [assigned[p] for p in group["player_id"]]
+    return result
+
+
+def build(export_dir: Path = EXPORT_DIR, inferred_positions: bool = False) -> pd.DataFrame:
+    """Read the exported CSVs and return the match-level feature table.
+
+    inferred_positions=False (default): positions are Riot's post-game teamPosition (as in the notebook).
+    inferred_positions=True: positions come from roles.infer_positions (spells + earlier games), the
+    only information a real prediction has. Needs participant_spells.csv (scripts.export_dataset).
+    """
+    export_dir = Path(export_dir)
     matches = pd.read_csv(export_dir / "matches.csv", dtype={"patch": str})  # keep "16.20", not 16.2
     participants = pd.read_csv(export_dir / "participants.csv")
     history = pd.read_csv(export_dir / "player_history.csv")
+    if inferred_positions:
+        spells_path = export_dir / "participant_spells.csv"
+        if not spells_path.exists():
+            raise FileNotFoundError(
+                f"Falta {spells_path}, necesario para inferir posiciones. "
+                "Créalo con: python -m scripts.export_dataset")
+        participants = inferred_participants(participants, history, matches, pd.read_csv(spells_path))
     return match_features(player_features(history, participants, matches), matches)
 
 

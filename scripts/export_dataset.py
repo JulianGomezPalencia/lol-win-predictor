@@ -11,6 +11,8 @@ What's exported (one CSV per table):
   player_history.csv    each player's ranked games BEFORE each target match (Agent 4)
   seed_players.csv      the players the sample was built from (Agent 1)
   player_snapshots.csv  today's rank of participants (Agent 5), if any were taken
+  participant_spells.csv  summoner spells of each participant, read from the cached match JSON in
+                        data/raw (no API calls). Used to infer roles before the game.
 
 Privacy: player IDs (PUUIDs) are replaced by a salted hash, so the files can't be linked back to a
 Riot account. The salt is generated once and stored in data/export_salt.txt (never committed), so
@@ -90,9 +92,40 @@ def export() -> dict[str, int]:
     return counts
 
 
+def export_spells(export_dir=EXPORT_DIR, load_match=None) -> int:
+    """Write participant_spells.csv (match_id, player_id, spell1_id, spell2_id) from the cached match JSON.
+
+    Same salt and anonymisation as the other tables. The match ids come from match_participants
+    (read-only copy of the DB); the spells from data/raw/matches. No API calls. Matches whose JSON is
+    not cached are skipped. Writes nothing else.
+    """
+    if load_match is None:
+        from src.riot_client import cache
+        load_match = cache.load_match
+    salt = load_salt()
+    conn = snapshot_connection()
+    match_ids = [r[0] for r in conn.execute("SELECT DISTINCT match_id FROM match_participants ORDER BY match_id")]
+    conn.close()
+    rows = []
+    for match_id in match_ids:
+        match = load_match(match_id)
+        if match is None:
+            continue
+        for p in match["info"]["participants"]:
+            rows.append([match_id, anonymize(p["puuid"], salt), p["summoner1Id"], p["summoner2Id"]])
+    rows.sort(key=lambda r: (r[0], r[1]))
+    export_dir.mkdir(parents=True, exist_ok=True)
+    with open(export_dir / "participant_spells.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["match_id", "player_id", "spell1_id", "spell2_id"])
+        writer.writerows(rows)
+    return len(rows)
+
+
 def main():
     for name, n in export().items():
         print(f"{name}.csv: {n} rows")
+    print(f"participant_spells.csv: {export_spells()} rows")
     print(f"Written to {EXPORT_DIR}")
 
 
