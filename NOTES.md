@@ -118,9 +118,24 @@ variables) by `seed_tier`, the tier of the player through whom the match was fou
 
 The intervals overlap heavily: the data cannot separate the bands, so we claim no difference.
 
+**These figures are for the 29-variable model, NOT the saved one.** The same check with the 22 variables
+of the final model (`train.final_model_tier_check`, no position variables):
+
+| Band | Matches | Accuracy (95 % CI) | ROC AUC (95 % CI) |
+|---|---|---|---|
+| Hierro a Platino | 225 | 53.3 % (47.1–60.0) | 0.561 (0.487–0.637) |
+| Esmeralda y Diamante | 136 | 59.6 % (51.5–67.6) | 0.568 (0.467–0.666) |
+| Maestro o superior | 404 | 53.7 % (48.8–58.7) | 0.536 (0.479–0.593) |
+
+Every AUC interval now includes 0.5, so for the final model we cannot say the signal is above chance
+in any single band. The conclusion that the bands cannot be separated still holds.
+
 The final model (`python -m src.models.predict --train`, saved in `data/models/`) uses the 22
-variables without position; temporal ROC AUC 0.549 (0.507–0.588). It scores played matches only:
-live prediction is not built (the spectator endpoint gives no positions).
+variables without position (15 of them are still lane-against-lane and use the post-game `team_position` to
+pair opponents); temporal ROC AUC 0.549 (0.507–0.588). It scores played matches only:
+live prediction is not built (the spectator endpoint gives no positions). The model is fitted on all
+920 matches, so predicting one of them is in-sample (AUC 0.608 on its own training rows vs 0.549
+walk-forward); the command warns when the match is in the training data.
 
 ## Ideas
 

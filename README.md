@@ -2,9 +2,10 @@
 
 Software Engineering project at Universidad Industrial de Santander (UIS).
 
-Predicts the probability that a League of Legends ranked match will be won **before it starts**, using
-each player's recent history: their last 10 results, whether they're in their usual lane, and whether
-they're playing a champion they're comfortable on.
+Predicts the probability that a League of Legends ranked match will be won, using each player's recent
+history from before the match: their last 10 results, whether they're in their usual lane, and whether
+they're playing a champion they're comfortable on. The saved model scores matches that were already played
+(see "Training the model").
 
 ## Setup
 
@@ -47,7 +48,10 @@ would go over Riot's limit (100 requests / 2 minutes).
     python -m src.models.predict --train          # fit the final model, save data/models/modelo_final.joblib
     python -m src.models.predict LA1_123456       # probability that blue won that (already played) match
 
-The final model is the logistic regression without the position variables. **Limit:** it scores only
+The final model is the logistic regression without the 7 position variables (a more cautious version,
+not a leak-free one: its 15 lane-against-lane variables still use the post-game `team_position` to pair
+opponents). `--train` needs no Riot API key; predicting a match does. If the match was part of the training
+data the command prints a warning, because that probability is in-sample. **Limit:** it scores only
 matches that were already played. Riot's live-game endpoint gives no positions, so a true live
 prediction would need role inference, which is not built. The signal is weak (see NOTES.md).
 
@@ -61,7 +65,7 @@ prediction would need role inference, which is not built. The signal is weak (se
 | `src/storage/` | SQLite database: `schema.sql` (tables) and `db.py` (queries) |
 | `src/agents/` | The five data-collection agents |
 | `src/features/` | Pre-game variables per player and per match (blue minus red, lane against lane) |
-| `src/models/` | Chronological split, baselines, models and metrics |
+| `src/models/` | Chronological split, baselines, models and metrics (`train.py`); final model and prediction (`predict.py`) |
 | `scripts/` | Runnable scripts: `run_pipeline.py`, `export_dataset.py`, `hello_riot.py` |
 | `tests/` | Automated tests (no real API calls) |
 | `data/` | Downloaded matches and the database (not in git) |
@@ -76,6 +80,7 @@ prediction would need role inference, which is not built. The signal is weak (se
 - [x] Feature engineering
 - [x] Model training (first version: weak signal, see NOTES.md)
 - [x] Sensitivity check on the position variables (see NOTES.md)
+- [x] Final model + `predict` command for played matches, per-tier check (see NOTES.md)
 - [ ] More data: a longer period, especially for the test set
 
 ---

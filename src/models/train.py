@@ -279,6 +279,13 @@ def position_sensitivity(table: pd.DataFrame, n_splits: int = 5) -> dict:
                                                     without["probabilidades"][name])}
 
 
+def final_model_tier_check(table: pd.DataFrame, n_splits: int = 5) -> pd.DataFrame:
+    """metrics_by_tier_band for the variable set of the SAVED model (no position variables)."""
+    reduced = table.drop(columns=position_features(feature_columns(table)))
+    walk = temporal_validation(reduced, n_splits)
+    return metrics_by_tier_band(walk["y"], walk["probabilidades"]["Regresión logística"], walk["seed_tier"])
+
+
 def metrics_table(metrics: dict) -> pd.DataFrame:
     rows = []
     for name, m in metrics.items():
@@ -321,6 +328,9 @@ def main():
     print()
     print("Regresión logística por banda de rango (validación temporal; rango = el del jugador semilla):")
     print(metrics_by_tier_band(walk["y"], walk["probabilidades"]["Regresión logística"], walk["seed_tier"]).to_string())
+    print()
+    print("Lo mismo con las variables del modelo final (sin posición):")
+    print(final_model_tier_check(table).to_string())
 
 
 if __name__ == "__main__":

@@ -115,8 +115,10 @@ def test_empty_histories_still_give_one_row_and_a_prediction():
 
 
 def patch_endpoints(monkeypatch, match, histories):
-    monkeypatch.setattr(predict.endpoints, "get_match", lambda match_id: match)
-    monkeypatch.setattr(predict.history_builder, "player_history",
+    from src.agents import history_builder
+    from src.riot_client import endpoints
+    monkeypatch.setattr(endpoints, "get_match", lambda match_id: match)
+    monkeypatch.setattr(history_builder, "player_history",
                         lambda puuid, start, *a, **k: histories.get(puuid, []))
 
 
@@ -129,7 +131,7 @@ def test_predict_match_probabilities_sum_to_one_and_count_missing_history(monkey
     assert result["prob_blue"] + result["prob_red"] == pytest.approx(1.0)
     assert 0 <= result["prob_blue"] <= 1 and not math.isnan(result["prob_blue"])
     assert result["blue_win"] == 1
-    assert result["partidas_sin_historial"] == 8
+    assert result["jugadores_sin_historial"] == 8
 
 
 def test_predict_match_invalid_match_raises(monkeypatch):
@@ -137,3 +139,51 @@ def test_predict_match_invalid_match_raises(monkeypatch):
     patch_endpoints(monkeypatch, fake_match(duration=100), {})
     with pytest.raises(ValueError, match="remake"):
         predict.predict_match("LA1_1", bundle)
+
+
+def test_match_in_training_data_is_flagged(monkeypatch):
+    table = synthetic_table()
+    bundle = predict.fit_final_model(table)
+    assert "M0" in bundle["match_ids"] and len(bundle["match_ids"]) == 120
+    patch_endpoints(monkeypatch, fake_match(match_id="M0"), {})
+    assert predict.predict_match("M0", bundle)["en_entrenamiento"] is True
+    patch_endpoints(monkeypatch, fake_match(match_id="LA1_NEW"), {})
+    assert predict.predict_match("LA1_NEW", bundle)["en_entrenamiento"] is False
+
+
+def test_old_bundle_without_ids_falls_back_to_timestamps():
+    bundle = {"last_match_ts": START}
+    assert predict.in_training_data("X", START, bundle) is True
+    assert predict.in_training_data("X", START + 1, bundle) is False
+
+
+def test_remake_only_player_counts_as_without_history(monkeypatch):
+    bundle = predict.fit_final_model(synthetic_table())
+    remake = {**hist_game(0, 1), "remake": 1}
+    patch_endpoints(monkeypatch, fake_match(), {"100_TOP": [remake]})
+    assert predict.predict_match("LA1_1", bundle)["jugadores_sin_historial"] == 10
+
+
+def test_missing_model_feature_raises(monkeypatch):
+    bundle = predict.fit_final_model(synthetic_table())
+    bundle["features"] = bundle["features"] + ["variable_que_no_existe"]
+    patch_endpoints(monkeypatch, fake_match(), {})
+    with pytest.raises(ValueError, match="variable_que_no_existe"):
+        predict.predict_match("LA1_1", bundle)
+
+
+def test_prediction_with_real_row_shape_and_empty_histories_runs_the_model():
+    bundle = predict.fit_final_model(synthetic_table())
+    match = fake_match()
+    row = predict.features_for_match(match, all_histories(match))[bundle["features"]]
+    assert 0 <= bundle["model"].predict_proba(row)[0, 1] <= 1
+
+
+def test_import_and_help_work_without_riot_api_key():
+    import os
+    import subprocess
+    import sys
+    env = {**os.environ, "RIOT_API_KEY": ""}
+    result = subprocess.run([sys.executable, "-m", "src.models.predict", "--help"], env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
