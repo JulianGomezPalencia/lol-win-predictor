@@ -185,3 +185,26 @@ def test_fetch_pending_stops_on_expired_key(conn, monkeypatch):
     with pytest.raises(requests.HTTPError):
         match_fetcher.fetch_pending(conn)
     assert db.count_target_matches_by_status(conn) == {"pending": 1}, "still pending -> retried next run"
+
+
+def test_limited_fetch_spreads_over_tiers(conn):
+    for tier, n in (("BRONZE", 6), ("CHALLENGER", 6), ("DIAMOND", 6)):
+        for i in range(n):
+            db.add_target_match(conn, f"LA1_{tier}_{i}", "seed", tier)
+    ids = db.get_match_ids_round_robin(conn, "pending", 6)
+    tiers = sorted(i.split("_")[1] for i in ids)
+    assert tiers == ["BRONZE"] * 2 + ["CHALLENGER"] * 2 + ["DIAMOND"] * 2
+    assert len(db.get_match_ids_round_robin(conn, "pending")) == 18
+
+
+def test_limited_batch_spreads_over_tiers_and_over_time(conn):
+    for tier in ("BRONZE", "GOLD"):
+        for i in range(100):
+            db.add_target_match(conn, f"LA1_{tier}_{i:03d}", "seed", tier)
+
+    batch = db.get_match_ids_round_robin(conn, "pending", 20)
+
+    assert sum("BRONZE" in m for m in batch) == sum("GOLD" in m for m in batch) == 10
+    newest_half = [m for m in batch if int(m.rsplit("_", 1)[1]) >= 50]
+    assert 0 < len(newest_half) < 20, "ids grow with time: a batch must not be only the oldest matches"
+    assert batch == db.get_match_ids_round_robin(conn, "pending", 20), "same queue, same batch"

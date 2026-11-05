@@ -47,7 +47,8 @@ def infer_positions(players: list[dict]) -> dict:
     if not ordered:
         return {}
     score = np.array([_scores(p) for p in ordered])
-    # Fixed, tiny preference by (player order, position order): only matters on exact ties.
+    # Fixed, tiny preference by (player order, position order). For a full team it adds the same sum to
+    # every assignment (so it changes nothing); it only matters when fewer than five players are given.
     tie = np.array([[TIE_BREAK * (i * len(POSITIONS) + j) for j in range(len(POSITIONS))]
                     for i in range(len(ordered))])
     rows, cols = linear_sum_assignment(-(score) + tie)

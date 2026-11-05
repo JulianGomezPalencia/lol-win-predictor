@@ -106,13 +106,16 @@ def export_spells(export_dir=EXPORT_DIR, load_match=None) -> int:
     conn = snapshot_connection()
     match_ids = [r[0] for r in conn.execute("SELECT DISTINCT match_id FROM match_participants ORDER BY match_id")]
     conn.close()
-    rows = []
+    rows, skipped = [], 0
     for match_id in match_ids:
         match = load_match(match_id)
         if match is None:
+            skipped += 1
             continue
         for p in match["info"]["participants"]:
             rows.append([match_id, anonymize(p["puuid"], salt), p["summoner1Id"], p["summoner2Id"]])
+    if skipped:
+        print(f"AVISO: {skipped} partidas sin JSON en caché: no tienen hechizos y sus roles inferidos serán menos fiables.")
     rows.sort(key=lambda r: (r[0], r[1]))
     export_dir.mkdir(parents=True, exist_ok=True)
     with open(export_dir / "participant_spells.csv", "w", newline="", encoding="utf-8") as f:

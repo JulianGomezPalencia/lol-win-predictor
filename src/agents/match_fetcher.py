@@ -90,9 +90,7 @@ def extract_participants(match: dict) -> list[dict]:
 
 def fetch_pending(conn, limit: int | None = None) -> dict[str, int]:
     """Process pending matches (at most `limit`). Return counts, e.g. {"fetched": 900, "remake": 30, ...}."""
-    match_ids = db.get_match_ids_by_status(conn, "pending")
-    if limit is not None:
-        match_ids = match_ids[:limit]
+    match_ids = db.get_match_ids_round_robin(conn, "pending", limit)  # a limit spreads over tiers
     counts: dict[str, int] = {}
     for i, match_id in enumerate(match_ids, start=1):
         try:

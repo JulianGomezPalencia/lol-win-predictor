@@ -8,10 +8,10 @@ Two levels:
   player_features()  one row per (match, player): recent form, lane fit, champion comfort...
   match_features()   one row per match: blue minus red, as a team and lane against lane
 
-The prediction is meant to be made after champion select: the champion each player picked and
-their position in the match are treated as known. Riot fills in teamPosition after the game from
-what the player did, and the API doesn't give the role from champion select, so this assumption
-can't be checked directly: train.position_sensitivity measures how much the results depend on it.
+The prediction is meant to be made after champion select. By default (build()) the position in the
+match is Riot's post-game teamPosition, treated as known; that can't be checked directly, and
+train.position_sensitivity measures how much the results depend on it. With inferred_positions=True
+the position is inferred from spells and earlier games, the only information a real prediction has.
 
 Lane against lane is the new idea after the EDA: on their own, absolute numbers (a 60 % win rate)
 said nothing about who wins, so we compare each player with the opponent in the same position.
@@ -22,6 +22,8 @@ Tests:    pytest tests/test_features.py -v
 from pathlib import Path
 
 import numpy as np
+import warnings
+
 import pandas as pd
 
 from src.features import roles
@@ -144,7 +146,9 @@ def inferred_participants(participants: pd.DataFrame, history: pd.DataFrame, mat
 
     Uses only the summoner spells and the player's positions in games strictly before the match
     (remakes and blanks ignored). Riot's team_position is never read, so the result cannot depend
-    on how the match went. Matches without a status of history_done are left with an empty position.
+    on how the match went. Every match gets inferred roles; player_features later drops matches that
+    are not history_done. Players without spell data get no spell evidence (a real jungler can then lose
+    the role), so a warning is printed when any participant has none.
     """
     start = matches.set_index("match_id")["game_start_ts"]
     h = history[(history["remake"] == 0) & history["target_match_id"].isin(start.index)]
@@ -154,6 +158,11 @@ def inferred_participants(participants: pd.DataFrame, history: pd.DataFrame, mat
     picked = {(m, p): tuple(int(x) for x in (a, b) if pd.notna(x))
               for m, p, a, b in zip(spells["match_id"], spells["player_id"],
                                     spells["spell1_id"], spells["spell2_id"])}
+    no_spells = sum(1 for m, p in zip(participants["match_id"], participants["player_id"])
+                    if not picked.get((m, p)))
+    if no_spells:
+        warnings.warn(f"{no_spells} participantes sin hechizos: sus roles inferidos serán menos fiables. "
+                      "Vuelve a exportar (scripts.export_dataset) con las partidas en caché.")
     result = participants.copy()
     result["team_position"] = ""
     for (match_id, _team), group in participants.groupby(["match_id", "team_id"]):

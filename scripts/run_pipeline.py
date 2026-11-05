@@ -43,6 +43,13 @@ def main():
                         help="discover: only matches from the last N days (default 14)")
     args = parser.parse_args()
 
+    if not 1 <= args.matches_per_player <= 100:
+        parser.error("--matches-per-player must be between 1 and 100 (Riot's maximum count)")
+    if args.days_back < 1:
+        parser.error("--days-back must be at least 1")
+    if args.limit is not None and args.limit < 1:
+        parser.error("--limit must be at least 1")
+
     steps = [step.strip() for step in args.steps.split(",")]
     unknown = [step for step in steps if step not in STEPS]
     if unknown:

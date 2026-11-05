@@ -356,3 +356,23 @@ def test_import_and_help_work_without_riot_api_key():
     result = subprocess.run([sys.executable, "-m", "src.models.predict", "--help"], env=env,
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_evaluate_new_excludes_matches_played_before_training_ended(bundle):
+    table = synthetic_table(n=160)
+    table["game_start_ts"] = np.arange(160) * 86_400_000
+    old = copy.deepcopy(bundle)
+    old["last_match_ts"] = 150 * 86_400_000  # most "new" ids are not after training
+    r = predict.evaluate_new(old, table)
+    assert r["n"] == 9 and r["excluidas_por_fecha"] == 31
+    assert sum(r["por_tier"].values()) == 9
+
+
+def test_safe_error_hides_the_url_and_puuid():
+    response = requests.Response()
+    response.status_code = 403
+    error = requests.HTTPError("403 Client Error: Forbidden for url: https://x/active-games/by-summoner/SECRETPUUID",
+                               response=response)
+    assert "SECRETPUUID" not in predict._safe_error(error) and "403" in predict._safe_error(error)
+    from src.riot_client.client import RiotUnavailableError
+    assert "SECRETPUUID" not in predict._safe_error(RiotUnavailableError("Gave up on https://x/SECRETPUUID"))

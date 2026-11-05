@@ -165,7 +165,8 @@ def score_game(game_id: str, start_ts: int, players: list[dict], histories: dict
         raise ValueError(f"El modelo guardado usa variables que ya no existen: {missing}. Vuelve a entrenar con --train.")
     prob_blue = float(bundle["model"].predict_proba(table[bundle["features"]])[0, 1])
     return {"prob_blue": prob_blue, "prob_red": 1 - prob_blue, "roles": roles,
-            "jugadores_sin_historial": sum(1 for g in histories.values() if all(game["remake"] for game in g))}
+            "jugadores_sin_historial": sum(1 for p in players
+                                          if all(game["remake"] for game in histories.get(p["key"], [])))}
 
 
 def in_training_data(match_id: str, start_ts: int, bundle: dict) -> bool:
@@ -248,6 +249,8 @@ def predict_live(riot_id: str, bundle: dict, progress=print, log_path: Path | No
         if endpoints.is_not_found(error):
             raise LiveError(f"No existe el Riot ID {riot_id}.")
         raise
+    if endpoints.is_firewall_blocked(puuid):
+        raise LiveError("El firewall de Riot bloquea las consultas sobre este jugador; no se puede predecir su partida.")
     game = endpoints.get_active_game(puuid)
     if game is None:
         raise LiveError(f"{riot_id} no está en una partida ahora mismo.")
@@ -285,11 +288,16 @@ def predict_live(riot_id: str, bundle: dict, progress=print, log_path: Path | No
 # --- Forward test of the frozen model ------------------------------------------------------
 
 
-def score_log(log_path: Path | None = None, get_match=None) -> dict:
-    """Compare the logged live predictions with the real results (finished games only)."""
+def score_log(log_path: Path | None = None, get_match=None, bundle: dict | None = None) -> dict:
+    """Compare the logged live predictions with the real results (finished games only).
+
+    With `bundle`, only rows logged by that model (model_trained_at == bundle["trained_at"]) are scored,
+    so the result is one frozen model's; rows from other models are counted in "otro_modelo".
+    """
     path = Path(log_path or LOG_PATH)
     if not path.exists():
-        return {"n": 0, "pendientes": 0, "descartadas": 0, "accuracy": None, "auc": None, "logged": 0}
+        return {"n": 0, "pendientes": 0, "descartadas": 0, "accuracy": None, "auc": None, "logged": 0,
+                "otro_modelo": 0}
     if get_match is None:
         from src.riot_client import endpoints
         get_match = endpoints.get_match
@@ -297,6 +305,11 @@ def score_log(log_path: Path | None = None, get_match=None) -> dict:
     from src.riot_client import endpoints
     with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
+    other_model = 0
+    if bundle is not None:
+        mine = [r for r in rows if r.get("model_trained_at") == bundle.get("trained_at", "")]
+        other_model = len(rows) - len(mine)
+        rows = mine
     probs, outcomes, pending, discarded = [], [], 0, 0
     for row in rows:
         try:
@@ -315,15 +328,21 @@ def score_log(log_path: Path | None = None, get_match=None) -> dict:
     y, p = np.array(outcomes), np.array(probs)
     both = n >= MIN_FINISHED_FOR_AUC and len(np.unique(y)) == 2
     return {"n": n, "logged": len(rows), "pendientes": pending, "descartadas": discarded,
-            "accuracy": float(accuracy_score(y, p >= 0.5)) if n else None,
+            "otro_modelo": other_model, "accuracy": float(accuracy_score(y, p >= 0.5)) if n else None,
             "auc": float(roc_auc_score(y, p)) if both else None}
 
 
 def evaluate_new(bundle: dict, table: pd.DataFrame) -> dict:
     """Frozen-model test: score only matches NOT in bundle["match_ids"]. The model is never refitted."""
     check_bundle(bundle)
+    missing = [f for f in bundle["features"] if f not in table.columns]
+    if missing:
+        raise ValueError(f"El modelo guardado usa variables que ya no existen: {missing}. Vuelve a entrenar con --train.")
     new = table[~table["match_id"].astype(str).isin(set(bundle["match_ids"]))]
-    new = new.sort_values("game_start_ts", kind="stable")
+    # "New" must also mean played after training ended, or it is not a forward test.
+    before = new["game_start_ts"] <= bundle["last_match_ts"]
+    excluded = int(before.sum())
+    new = new[~before].sort_values("game_start_ts", kind="stable")
     if new.empty:
         return {"n": 0}
     y = new["blue_win"].to_numpy()
@@ -333,7 +352,9 @@ def evaluate_new(bundle: dict, table: pd.DataFrame) -> dict:
     constant = np.full(len(y), np.clip(bundle["blue_win_rate"], 1e-6, 1 - 1e-6))
     day = lambda ts: datetime.fromtimestamp(ts / 1000, timezone.utc).strftime("%Y-%m-%d")
     return {
-        "n": int(len(new)), "desde": day(new["game_start_ts"].min()), "hasta": day(new["game_start_ts"].max()),
+        "n": int(len(new)), "excluidas_por_fecha": excluded,
+        "por_tier": {str(k): int(v) for k, v in new["seed_tier"].value_counts().sort_index().items()},
+        "desde": day(new["game_start_ts"].min()), "hasta": day(new["game_start_ts"].max()),
         "accuracy": float(accuracy_score(y, pred)), "accuracy_ic95": train.bootstrap_accuracy_ci(y, pred),
         "auc": float(roc_auc_score(y, proba)) if two_classes else None,
         "auc_ic95": train.bootstrap_auc_ci(y, proba) if two_classes else None,
@@ -350,6 +371,14 @@ def _weak_signal_warning(bundle: dict) -> str:
     low, high = bundle["auc_ic95"]
     return ("Aviso: es una señal débil. En validación temporal el modelo tiene ROC AUC "
             f"{bundle['auc_temporal']:.3f} (IC 95 %: {low:.3f} a {high:.3f}); 0.5 equivale a adivinar.")
+
+
+def _safe_error(error: Exception) -> str:
+    """Error text without the URL (it can contain a puuid): only the HTTP status or a fixed message."""
+    response = getattr(error, "response", None)
+    if isinstance(error, requests.HTTPError) and response is not None:
+        return f"Riot respondió con el código HTTP {response.status_code} (la clave puede haber caducado)."
+    return "Riot o la conexión fallaron repetidamente; vuelve a intentarlo más tarde."
 
 
 def _load_checked() -> dict:
@@ -381,7 +410,8 @@ def _predict_command(match_id: str) -> None:
     try:
         result = predict_match(match_id, bundle)
     except (ValueError, requests.HTTPError, RiotUnavailableError) as error:
-        raise SystemExit(f"No se pudo predecir {match_id}: {error}")
+        raise SystemExit(f"No se pudo predecir {match_id}: "
+                         f"{error if isinstance(error, ValueError) else _safe_error(error)}")
     real = "azul" if result["blue_win"] else "rojo"
     if result["en_entrenamiento"]:
         print("ADVERTENCIA: el modelo se ajustó con esta partida. La probabilidad es dentro de la muestra "
@@ -401,7 +431,7 @@ def _live_command(riot_id: str) -> None:
     except LiveError as error:
         raise SystemExit(str(error))
     except (requests.HTTPError, RiotUnavailableError) as error:
-        raise SystemExit(f"No se pudo predecir la partida en vivo: {error}")
+        raise SystemExit(f"No se pudo predecir la partida en vivo: {_safe_error(error)}")
     for team_id, label in ((100, "Equipo azul"), (200, "Equipo rojo")):
         print(f"{label}:")
         for position, champion in result["teams"].get(team_id, []):
@@ -417,11 +447,14 @@ def _live_command(riot_id: str) -> None:
 
 def _score_log_command() -> None:
     from src.riot_client.client import RiotUnavailableError
+    bundle = _load_checked()
     try:
-        r = score_log()
+        r = score_log(bundle=bundle)
     except (requests.HTTPError, RiotUnavailableError) as error:
-        raise SystemExit(f"No se pudo comprobar el registro: {error}")
-    print(f"Partidas registradas: {r['logged']}; terminadas y evaluadas: {r['n']}; "
+        raise SystemExit(f"No se pudo comprobar el registro: {_safe_error(error)}")
+    print(f"Modelo evaluado: entrenado el {bundle.get('trained_at', '?')}; "
+          f"filas de otros modelos (no evaluadas): {r['otro_modelo']}")
+    print(f"Partidas registradas (de este modelo): {r['logged'] - r['otro_modelo']}; terminadas y evaluadas: {r['n']}; "
           f"sin terminar: {r['pendientes']}; descartadas (remake): {r['descartadas']}")
     if r["n"] == 0:
         print("Todavía no hay partidas terminadas que evaluar.")
@@ -439,14 +472,21 @@ def _evaluate_new_command() -> None:
         table = build.build(inferred_positions=True)
     except FileNotFoundError as error:
         raise SystemExit(str(error))
-    r = evaluate_new(bundle, table)
+    try:
+        r = evaluate_new(bundle, table)
+    except ValueError as error:
+        raise SystemExit(str(error))
     if r["n"] == 0:
-        print("0 partidas nuevas: todas las partidas exportadas ya estaban en el entrenamiento. "
+        print("0 partidas nuevas (posteriores al fin del entrenamiento y fuera de él). "
               "Recolecta más datos y vuelve a exportar (ver README).")
         return
     a_low, a_high = r["accuracy_ic95"]
     print(f"Modelo congelado (entrenado el {bundle.get('trained_at', '?')}), sin reajustar.")
     print(f"n = {r['n']} partidas nuevas, del {r['desde']} al {r['hasta']}")
+    print("Por liga: " + ", ".join(f"{t} {n}" for t, n in r["por_tier"].items()))
+    if r["excluidas_por_fecha"]:
+        print(f"Excluidas {r['excluidas_por_fecha']} partidas no incluidas en el entrenamiento pero jugadas "
+              "antes de que terminara (no son prueba hacia delante).")
     print(f"Accuracy: {r['accuracy']:.1%} (IC 95 %: {a_low:.1%} a {a_high:.1%})")
     if r["auc"] is None:
         print("ROC AUC: no se puede calcular (una sola clase).")
