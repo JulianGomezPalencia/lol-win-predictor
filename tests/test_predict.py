@@ -643,3 +643,139 @@ def test_safe_error_hides_the_url_and_puuid():
     assert "SECRETPUUID" not in predict._safe_error(error) and "403" in predict._safe_error(error)
     from src.riot_client.client import RiotUnavailableError
     assert "SECRETPUUID" not in predict._safe_error(RiotUnavailableError("Gave up on https://x/SECRETPUUID"))
+
+
+class PredictionOnly:
+    def predict_proba(self, X):
+        p = X['p'].to_numpy()
+        return np.column_stack([1-p, p])
+
+    def fit(self, *args, **kwargs):
+        raise AssertionError('Evaluation must never fit')
+
+
+@pytest.fixture
+def second_world(monkeypatch):
+    cutoff = predict.SECOND_CUTOFF_TS
+    bundle = dict(version=2, roles='inferred', model=PredictionOnly(), features=['p'],
+                  match_ids=['fit'], development_ids=['fit', 'dev'], last_match_ts=cutoff,
+                  blue_win_rate=.5, pool=pd.DataFrame(), champion_positions={},
+                  auc_temporal=.55, auc_ic95=(.51, .59))
+    table = pd.DataFrame(dict(match_id=['fit', 'dev', 'old', 'edge', 'new0', 'new1'],
+                              game_start_ts=[cutoff+1, cutoff+1, cutoff-1, cutoff, cutoff+1, cutoff+2],
+                              blue_win=[0, 1, 0, 1, 0, 1], seed_tier=['GOLD']*6,
+                              p=[.1, .9, .1, .9, .1, .9]))
+    calibration = train.calibration_summary
+    monkeypatch.setattr(train, 'calibration_summary', lambda y, p: calibration(y, p, n_boot=10))
+    return bundle, copy.deepcopy(bundle), table
+
+
+def test_evaluate_final_filters_and_never_fits(second_world):
+    final, candidate, table = second_world
+    before = joblib.hash((final, candidate))
+    result = predict.evaluate_final(final, candidate, table, table.iloc[::-1])
+    assert result['n'] == 2
+    assert [result[k] for k in ('excluidas_ajuste', 'excluidas_desarrollo', 'excluidas_por_fecha')] == [1, 1, 2]
+    assert result['mejor'] and 'es mejor' in result['veredicto']
+    assert result['calibracion']['final']['brier']['estimate'] == pytest.approx(.01)
+    assert joblib.hash((final, candidate)) == before
+    # The bundle cutoff can be later than the preregistered minimum.
+    final['last_match_ts'] += 1
+    assert predict.evaluate_final(final, candidate, table, table)['n'] == 1
+
+
+def test_evaluate_final_one_class_and_negative_verdict(second_world):
+    final, candidate, table = second_world
+    table['blue_win'] = 1
+    table['p'] = .1
+    r = predict.evaluate_final(final, candidate, table, table)
+    assert r['modelos']['final']['auc'] is None
+    assert r['calibracion']['final']['slope']['estimate'] is None
+    assert not r['mejor'] and 'No se demuestra' in r['veredicto']
+
+
+@pytest.mark.parametrize('failure', ['ids', 'outcome', 'features', 'duplicate'])
+def test_evaluate_final_alignment_guards(second_world, failure):
+    final, candidate, table = second_world
+    other = table.copy()
+    if failure == 'ids': other.loc[0, 'match_id'] = 'different'
+    elif failure == 'outcome': other.loc[0, 'blue_win'] = 1
+    elif failure == 'features': other = other.drop(columns='p')
+    else: other = pd.concat([other, other.iloc[:1]])
+    with pytest.raises(ValueError):
+        predict.evaluate_final(final, candidate, table, other)
+
+
+def test_second_command_recording_and_empty(second_world, tmp_path, monkeypatch):
+    final, candidate, table = second_world
+    monkeypatch.setattr(predict, 'load_model', lambda path: final if path.name == 'modelo_final.joblib' else candidate)
+    pools = []
+    def table_for(export, pool, shares):
+        pools.append((pool, shares))
+        return table
+    monkeypatch.setattr(predict, '_table_for', table_for)
+    output = []
+    predict.evaluate_final_command(tmp_path, tmp_path, output.append)
+    predict.evaluate_final_command(tmp_path, tmp_path, output.append)
+    assert len(pools) == 4 and pools[0][0] is final['pool'] and pools[1][0] is candidate['pool']
+    assert 'ejecuciones anteriores 1' in '\n'.join(output)
+    assert len(predict._read_test_runs(tmp_path, predict.SECOND_RESULT_NAME)) == 2
+    assert {p.name for p in tmp_path.iterdir()} == {'segunda_prueba.json'}
+    assert 'Segunda prueba independiente de este modelo' in predict._weak_signal_warning(final, tmp_path)
+    assert 'Constante menos modelo final, log loss' in '\n'.join(output) and "{'" not in '\n'.join(output)
+    refit = {**final, 'trained_at': 'otro'}  # a later refit is a different model: its warning must not claim this test
+    assert 'Segunda prueba independiente' not in predict._weak_signal_warning(refit, tmp_path)
+    before = (tmp_path / predict.SECOND_RESULT_NAME).read_bytes()
+    table.loc[:, 'game_start_ts'] = predict.SECOND_CUTOFF_TS
+    predict.evaluate_final_command(tmp_path, tmp_path, output.append)
+    assert (tmp_path / predict.SECOND_RESULT_NAME).read_bytes() == before
+    assert 'No se escribió nada' in output[-1]
+
+
+def test_evaluate_final_cli(monkeypatch):
+    import sys
+    called = []
+    monkeypatch.setattr(sys, 'argv', ['predict', '--evaluate-final'])
+    monkeypatch.setattr(predict, 'evaluate_final_command', lambda: called.append(True))
+    predict.main()
+    assert called == [True]
+
+
+def test_evaluate_final_rejects_missing_date(second_world):
+    final, candidate, table = second_world
+    table.loc[4, 'game_start_ts'] = np.nan
+    r = predict.evaluate_final(final, candidate, table, table)
+    assert r['n'] == 1 and r['excluidas_por_fecha'] == 3
+
+
+@pytest.mark.parametrize('other', ['--train', '--freeze', '--evaluate-new', '--live', '--score-log'])
+def test_second_cli_cannot_trigger_other_commands(monkeypatch, other):
+    import sys
+    arguments = ['predict', '--evaluate-final', other]
+    if other == '--live': arguments.append('Synthetic#TEST')
+    monkeypatch.setattr(sys, 'argv', arguments)
+    with pytest.raises(SystemExit) as error:
+        predict.main()
+    assert error.value.code == 2
+
+
+def test_second_command_zero_matches_creates_no_file(second_world, tmp_path, monkeypatch):
+    final, candidate, table = second_world
+    monkeypatch.setattr(predict, 'load_model', lambda path: final if path.name == 'modelo_final.joblib' else candidate)
+    monkeypatch.setattr(predict, '_table_for', lambda *args: table.iloc[:4])
+    result = predict.evaluate_final_command(tmp_path, tmp_path, out=lambda line: None)
+    assert result['n'] == 0
+    assert not list(tmp_path.iterdir())
+
+
+def test_second_record_leaves_first_test_unchanged(second_world, tmp_path, monkeypatch):
+    final, candidate, table = second_world
+    sentinel = b'{"runs": [{"original": true}]}\n'
+    first = tmp_path / predict.TEST_RESULT_NAME
+    first.write_bytes(sentinel)
+    r = predict.evaluate_final(final, candidate, table, table)
+    predict.record_test_run(r, tmp_path, predict.SECOND_RESULT_NAME)
+    assert first.read_bytes() == sentinel
+    saved = json.loads((tmp_path / predict.SECOND_RESULT_NAME).read_text())['runs'][0]
+    assert saved['calibracion'] == json.loads(json.dumps(r['calibracion']))
+    assert saved['selectiva'] == r['selectiva']

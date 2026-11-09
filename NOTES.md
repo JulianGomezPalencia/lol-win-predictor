@@ -246,3 +246,92 @@ now reads every table from one sqlite backup snapshot in a temporary file.
   newer matches (and a longer test period); the history step is the slow part (~110 calls/match).
 - [ ] **Rank at match time.** Riot has no historical rank endpoint. A proxy could be the average
   rank of the seed player's league, or LP gained/lost in the history games (not in match-v5).
+
+## Segunda prueba, fijada el 2026-11-09
+
+Prerregistro anterior a cualquier ejecución de `--evaluate-final`. La recolección sigue escribiendo la DB;
+**no se ejecutó esta prueba durante la implementación**. Su resultado está pendiente.
+
+- **Modelo:** `data/models/modelo_final.joblib` exactamente como está guardado: 10 variables congeladas,
+  ajuste en las 2.973 partidas, C = 0.01. El comando nunca ajusta ni recalibra el predictor. Cada modelo
+  usa su propio `pool` y `champion_positions` guardados, mediante `predict._table_for`.
+- **Muestra:** partidas `history_done` del export, ajenas tanto a `match_ids` como a `development_ids`
+  del bundle final. Inicio estrictamente posterior al `last_match_ts` del bundle y al
+  **2026-11-05 18:00 UTC**. El segundo límite queda también en código para no depender de que el máximo
+  del export coincida exactamente con esa hora. Se imprimen exclusiones por ajuste, desarrollo (sin
+  volver a contar ajuste) y fecha (entre las restantes), ligas y fechas UTC.
+- **Criterio primario:** IC 95 % bootstrap emparejado de pérdida logarítmica de la constante menos la
+  del final enteramente por encima de cero, con `train.paired_log_loss_difference` (2.000 remuestreos,
+  semilla 42). Constante = `bundle['blue_win_rate']` del modelo final. Si el intervalo toca cero,
+  no se demuestra mejora. No se cambia el criterio al ver AUC o accuracy.
+- **Secundarios, no decisivos:** accuracy y AUC con IC 95 % (2.000 remuestreos), pérdida logarítmica,
+  Brier y ECE (10 bins de igual ancho), intercepto y pendiente de recalibración logística conjunta
+  con IC bootstrap (500 remuestreos, semilla 42). La recalibración es solo diagnóstico. AUC no
+  calculable con una sola clase o predicción constante; intercepto/pendiente no identificables con
+  una sola clase o predicción constante se registran como `null`.
+- **Selectividad:** confianza = max(p, 1−p) ≥ 0.55 / 0.60 / 0.65; n, cobertura y accuracy con IC Wilson
+  95 %. Un subconjunto vacío tiene accuracy e IC indefinidos (`null`). Se informa para final,
+  candidato congelado y constante. `modelo_candidato.joblib` es solo referencia de deriva, con su
+  propio pool: no compite para sustituir al final.
+- **Potencia:** en la primera prueba la ganancia del candidato sobre constante fue
+  0.6922 − 0.6847 = 0.0075 en 1.767 partidas. Con menos de 1.000 se imprime aviso de poca potencia;
+  ese umbral no garantiza potencia suficiente ni autoriza detener la colección según el resultado.
+- **Registro:** cada ejecución no vacía se añade a `data/models/segunda_prueba.json`, formato
+  `{"runs": [...]}`; se imprime cuántas ejecuciones anteriores existen. Con cero partidas no se escribe
+  nada. Nunca se modifica `prueba_final.json`. Repetir con la misma muestra no añade evidencia;
+  sucesivas ejecuciones con muestras superpuestas tampoco son réplicas independientes. No usar
+  inspecciones repetidas para decidir cuándo detenerse o cambiar la hipótesis.
+- **Después:** no se prevé otro reentrenamiento. El comportamiento de `--train` se conserva por
+  compatibilidad; no es el siguiente paso de esta segunda prueba.
+
+Orden autorizado para una ejecución futura: terminar/detener recolección → exportar una vez →
+`python -m src.models.predict --evaluate-final`. No ejecutar durante la recolección. El comando lee
+solo CSV y bundles, sin DB, API ni clave Riot.
+
+## Análisis del 2026-11-09
+
+Fuente numérica: el análisis del 2026-11-09 y sus comprobaciones.
+Es análisis **post-hoc de la primera prueba** (n = 1.767), no una segunda prueba ni selección de un
+modelo nuevo. Las métricas reproducen `prueba_final.json`: candidato accuracy 0.564799, AUC 0.577487,
+log loss 0.684708; base 0.534239 / 0.549108 / 0.691666; nueve 0.551783 / 0.574274 / 0.684867.
+
+| Confianza mínima del candidato | n | Cobertura | Accuracy (IC 95 % Wilson) |
+|---|---:|---:|---:|
+| 0.55 | 975 | 55.18 % | 58.36 % (55.24–61.41) |
+| 0.60 | 414 | 23.43 % | 60.14 % (55.36–64.75) |
+| 0.65 | 140 | 7.92 % | 59.29 % (51.01–67.07) |
+
+Sacrificar cobertura mejora modestamente el acierto. No se eligió un umbral óptimo; los subconjuntos
+anidados son pequeños y no permiten comparar modelos como si fueran las mismas partidas.
+
+**Calibración:** candidato Brier 0.245742 (0.241739–0.249314), ECE 0.016218
+(0.010299–0.042837), intercepto −0.030477 (−0.133355–0.065950), pendiente 0.766082
+(0.507876–1.057078). Base: pendiente 0.513848 (0.248792–0.785763), ECE 0.037954.
+La pendiente del candidato incluye 1; no se afirma sobreconfianza concluyente. ECE cambia con los bins:
+0.0162 / 0.0128 / 0.0281 con 10 / 15 / 20. No es una propiedad independiente de la discretización;
+su sesgo finito impide usar ese IC como prueba de calibración perfecta. Los deciles de frecuencia
+igual del gráfico de fiabilidad son distintos de los bins de ancho igual de ECE.
+
+**Factores, asociaciones y no causas:** kills OR por SD 1.25 (1.17–1.36), KDA 1.17 (1.09–1.28),
+experiencia con campeón 1.14 (1.07–1.23), tasa campeón/posición 1.09 (1.01–1.18).
+Permutar kills/KDA reduce AUC aproximadamente 0.030 / 0.037, con IC positivos en ambos esquemas.
+Experiencia con campeón es **limítrofe**: el IC de caída de AUC incluye cero en el esquema original
+(−0.000146 a 0.034565), pero lo excluye en el recheck; la pérdida logarítmica sí es positiva en ambos.
+El contraste global de quintiles inferior/superior de kills es 39.4 % / 56.5 % de victoria azul y conserva
+su dirección en las tres bandas. Los contrastes de KDA/experiencia no son visibles en Esmeralda/Diamante.
+El OR ajustado de win rate de 0.86 es condicional a rendimiento, no evidencia de que ganar perjudique.
+Racha, pausa, historial y actividad de 24 h tienen IC que incluyen 1; permanecen por congelación.
+
+**Draft:** se ensayó una sola variable, tasa media global del campeón con pool local disponible antes
+del inicio. Ganancia CV −0.000065 (p corregido 0.20), ganancia walk-forward −0.000107 en 2.475
+predicciones: no retenida. No hay n de potencia para un efecto no positivo. El preregistro se enmendó
+antes de calcular resultados para respetar disponibilidad; la versión retrospectiva no decidió la
+selección. No se ensayaron balance AD/AP, tanques, melee, matchups ni tasas por parche. El nulo solo
+se refiere a esa variable adicional, no al draft en general.
+
+**Límites:** aproximadamente 58 % de la primera prueba es Maestro o superior; la repetición de jugadores
+produce clustering no modelado y puede estrechar demasiado los IC por partida. Los bootstrap de
+coeficientes son descriptivos, las variables están correlacionadas y el rango actual no es rango
+histórico. El notebook reproduce los ajustes desde CSV y usa 200 remuestreos descriptivos para mantener
+el tiempo de Colab; sus IC pueden diferir de los 500 del análisis original. No evalúa el final en sus
+2.973 partidas como si fueran una prueba nueva.

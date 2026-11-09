@@ -146,6 +146,69 @@ def paired_log_loss_difference(y, proba_base, proba_new, n_boot: int = 2000, see
     return {"diferencia": float(diff.mean()), "ic95": (float(low), float(high))}
 
 
+def selective_accuracy(y, p, thresholds=(0.55, 0.60, 0.65)) -> pd.DataFrame:
+    """Confidence-selected accuracy with Wilson 95% intervals; empty subsets are undefined."""
+    y, p = np.asarray(y), np.asarray(p, dtype=float)
+    rows = []
+    z = 1.959963984540054
+    for threshold in thresholds:
+        mask = np.maximum(p, 1 - p) >= threshold
+        n = int(mask.sum())
+        accuracy = float(np.mean((p[mask] >= .5) == y[mask])) if n else None
+        low = high = None
+        if n:
+            denominator = 1 + z*z/n
+            center = (accuracy + z*z/(2*n))/denominator
+            half = z*np.sqrt(accuracy*(1-accuracy)/n + z*z/(4*n*n))/denominator
+            low, high = center-half, center+half
+        rows.append(dict(threshold=threshold, n=n, coverage=n/len(y) if len(y) else 0.,
+                         accuracy=accuracy, lo=low, hi=high))
+    return pd.DataFrame(rows)
+
+
+def calibration_summary(y, p, n_bins=10, n_boot=500, seed=SEED) -> dict:
+    """Brier, fixed-width ECE and joint logistic recalibration, with match bootstrap CIs.
+
+    Recalibration is diagnostic only. Its coefficients are undefined with one outcome
+    class or constant predictions; those estimates and intervals are returned as None.
+    """
+    from scipy.optimize import minimize
+    from scipy.special import logit
+    y, p = np.asarray(y), np.asarray(p, dtype=float)
+    if not len(y) or y.shape != p.shape or not np.isfinite(p).all() or ((p < 0) | (p > 1)).any():
+        raise ValueError("Se necesitan resultados y probabilidades válidas, no vacíos y alineados.")
+    if n_bins < 1 or n_boot < 1:
+        raise ValueError("n_bins y n_boot deben ser positivos.")
+
+    def estimates(a, q):
+        bins = np.minimum((q*n_bins).astype(int), n_bins-1)
+        ece = sum(np.sum(bins == i)*abs(q[bins == i].mean()-a[bins == i].mean())
+                  for i in range(n_bins) if np.any(bins == i))/len(a)
+        intercept = slope = np.nan
+        if len(np.unique(a)) == 2 and len(np.unique(q)) > 1:
+            z = logit(np.clip(q, 1e-8, 1-1e-8))
+            fit = minimize(lambda b: np.mean(np.logaddexp(0, b[0]+b[1]*z)-a*(b[0]+b[1]*z)),
+                           [0, 1], method="BFGS")
+            if np.isfinite(fit.x).all():
+                intercept, slope = fit.x
+        return np.array([np.mean((a-q)**2), ece, intercept, slope])
+
+    values = estimates(y, p)
+    rng = np.random.default_rng(seed)
+    samples = []
+    for _ in range(n_boot):
+        idx = rng.integers(len(y), size=len(y))
+        samples.append(estimates(y[idx], p[idx]))
+    samples = np.asarray(samples)
+    result = {}
+    for j, name in enumerate(("brier", "ece", "intercept", "slope")):
+        valid = samples[:, j][np.isfinite(samples[:, j])]
+        result[name] = {"estimate": float(values[j]) if np.isfinite(values[j]) else None,
+                        "ic95": tuple(float(v) for v in np.percentile(valid, [2.5, 97.5]))
+                        if len(valid) and np.isfinite(values[j]) else None}
+    return result
+
+
 def evaluate(y: pd.Series, proba: np.ndarray) -> dict:
     """Test-set metrics from the predicted probability of a blue win."""
     y = np.asarray(y)

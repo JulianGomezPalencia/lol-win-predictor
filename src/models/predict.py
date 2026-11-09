@@ -7,6 +7,7 @@ Order of use (see README):
   python -m src.models.predict --evaluate-new        # candidate vs base on matches that are NOT in the 1,206 development
                                                      #   matches and were played after the last of the 920 (never refits)
   python -m src.models.predict --train               # only after a test result: refit on every usable match, save modelo_final
+  python -m src.models.predict --evaluate-final      # second test of the shipped bundle on new matches; never refits
   python -m src.models.predict LA1_123456            # probability that blue wins that (played) match
   python -m src.models.predict --live "Name#TAG"     # a game in progress (spectator-v5), BEFORE it ends
   python -m src.models.predict --score-log           # compare the logged live predictions with the real results
@@ -24,7 +25,7 @@ Live limits: the game must be ranked solo/duo (queue 420) and in progress; a hid
 player has no history; collecting data (run_pipeline) and --live must not run at the same time, because
 each process has its own rate limiter.
 
---freeze, --evaluate-new and --train read data/export and write only to data/models. None of them calls the
+--freeze, --evaluate-new, --evaluate-final and --train read data/export and write only to data/models. None of them calls the
 Riot API or opens data/db/lol.sqlite, and none writes to data/export.
 Tests:    pytest tests/test_predict.py -v
 """
@@ -64,6 +65,8 @@ MIN_FINISHED_FOR_AUC = 10
 BUNDLE_VERSION = 2
 BASE_FEATURE_COUNT, BASE_MATCH_COUNT, DEVELOPMENT_COUNT = 22, 920, 1206  # what --freeze expects to find
 LOW_POWER_N = 1000
+SECOND_RESULT_NAME = "segunda_prueba.json"
+SECOND_CUTOFF_TS = int(datetime(2026, 11, 5, 18, tzinfo=timezone.utc).timestamp() * 1000)
 RETRAIN_MESSAGE = ("El modelo guardado es de una versión anterior (sin las 10 variables congeladas) o usa posiciones "
                    "de Riot. Congélalo con: python -m src.models.predict --freeze (una vez); después de la prueba, "
                    "reentrena con: python -m src.models.predict --train")
@@ -506,20 +509,116 @@ def evaluate_new(base: dict, candidate: dict, base_table: pd.DataFrame, candidat
     return result
 
 
-def _read_test_runs(models_dir: Path) -> list:
-    path = Path(models_dir) / TEST_RESULT_NAME
+def evaluate_final(final: dict, candidate: dict, final_table: pd.DataFrame, candidate_table: pd.DataFrame) -> dict:
+    """Second preregistered test of the shipped bundle; prediction only, never fit."""
+    check_bundle(final)
+    check_bundle(candidate)
+    for table in (final_table, candidate_table):
+        if table.match_id.astype(str).duplicated().any():
+            raise ValueError("Las tablas contienen partidas duplicadas.")
+    if set(final_table.match_id.astype(str)) != set(candidate_table.match_id.astype(str)):
+        raise ValueError("Las tablas no tienen las mismas partidas.")
+    aligned = candidate_table.set_index(candidate_table.match_id.astype(str)).loc[final_table.match_id.astype(str)]
+    if not np.array_equal(aligned.blue_win.to_numpy(), final_table.blue_win.to_numpy()):
+        raise ValueError("Las tablas no tienen el mismo resultado.")
+    ids = final_table.match_id.astype(str)
+    fitted = ids.isin(set(map(str, final["match_ids"])))
+    development = ~fitted & ids.isin(set(map(str, final["development_ids"])))
+    early = ~fitted & ~development & ~(final_table.game_start_ts > max(final["last_match_ts"], SECOND_CUTOFF_TS))
+    result = dict(n=0, excluidas_ajuste=int(fitted.sum()), excluidas_desarrollo=int(development.sum()),
+                  excluidas_por_fecha=int(early.sum()))
+    test = final_table[~fitted & ~development & ~early].sort_values(["game_start_ts", "match_id"], kind="stable")
+    if test.empty:
+        return result
+    other = candidate_table.set_index(candidate_table.match_id.astype(str)).loc[test.match_id.astype(str)]
+    for bundle, table in ((final, test), (candidate, other)):
+        missing = [f for f in bundle["features"] if f not in table]
+        if missing:
+            raise ValueError(f"Faltan variables en la tabla de prueba: {missing}")
+    y = test.blue_win.to_numpy()
+    probabilities = dict(final=final["model"].predict_proba(test[final["features"]])[:, 1],
+                         candidato=candidate["model"].predict_proba(other[candidate["features"]])[:, 1],
+                         constante=np.full(len(y), final["blue_win_rate"]))
+    difference = train.paired_log_loss_difference(y, probabilities["constante"], probabilities["final"])
+    better = difference["ic95"][0] > 0
+    day = lambda t: datetime.fromtimestamp(t/1000, timezone.utc).isoformat()
+    selective = {}
+    for name, p in probabilities.items():
+        frame = train.selective_accuracy(y, p).astype(object)
+        selective[name] = frame.where(pd.notna(frame), None).to_dict("records")
+    result.update(modelo_trained_at=final.get("trained_at"), n=len(test), desde=day(test.game_start_ts.min()), hasta=day(test.game_start_ts.max()),
+                  por_tier={str(k): int(v) for k, v in test.seed_tier.value_counts().sort_index().items()},
+                  modelos={k: _metrics(y, p) for k, p in probabilities.items()},
+                  calibracion={k: train.calibration_summary(y, p) for k, p in probabilities.items()},
+                  selectiva=selective,
+                  diferencias={"log_loss": difference}, mejor=bool(better), poca_potencia=len(test) < LOW_POWER_N,
+                  veredicto=("El modelo final es mejor que la constante: el IC 95 % de la reducción de pérdida logarítmica queda por encima de 0."
+                             if better else "No se demuestra que el modelo final sea mejor que la constante: el IC 95 % no queda por encima de 0."))
+    return result
+
+
+def evaluate_final_command(export_dir: Path = build.EXPORT_DIR, models_dir: Path = MODELS_DIR, out=print) -> dict:
+    """Read exports and each model's frozen pool, append only to segunda_prueba.json."""
+    export_dir, models_dir = Path(export_dir), Path(models_dir)
+    try:
+        final = load_model(models_dir / "modelo_final.joblib")
+        candidate = load_model(models_dir / CANDIDATE_NAME)
+        check_bundle(final)
+        check_bundle(candidate)
+        tables = [_table_for(export_dir, b["pool"], b["champion_positions"]) for b in (final, candidate)]
+        r = evaluate_final(final, candidate, *tables)
+    except (FileNotFoundError, ValueError) as error:
+        raise PredictError(str(error))
+    earlier = len(_read_test_runs(models_dir, SECOND_RESULT_NAME))
+    out(f"Segunda prueba: ejecuciones anteriores {earlier}.")
+    out(f"Excluidas por ajuste: {r['excluidas_ajuste']}; por desarrollo (sin contar ajuste): {r['excluidas_desarrollo']}; por fecha: {r['excluidas_por_fecha']}.")
+    if not r["n"]:
+        out("0 partidas de prueba. No se escribió nada. Exporta de nuevo cuando termine la recolección.")
+        return r
+    out(f"n = {r['n']}; fechas UTC: {r['desde']} a {r['hasta']}")
+    out("Por liga: " + ", ".join(f"{t} {n}" for t, n in r["por_tier"].items()))
+    if r["poca_potencia"]:
+        out(f"AVISO: menos de {LOW_POWER_N} partidas; poca potencia para una mejora pequeña (referencia: 0.0075 en 1767).")
+    names = {"final": f"Modelo final ({len(final['features'])} variables)",
+             "candidato": "Candidato congelado (solo referencia de deriva)", "constante": "Constante (tasa del entrenamiento)"}
+    interval = lambda ci, fmt: "sin IC" if ci is None else f"{fmt.format(ci[0])} a {fmt.format(ci[1])}"
+    for key, label in names.items():
+        m = r["modelos"][key]
+        auc = "ROC AUC no calculable" if m["auc"] is None else f"ROC AUC {m['auc']:.3f} ({interval(m['auc_ic95'], '{:.3f}')})"
+        out(f"{label}: accuracy {m['accuracy']:.1%} ({interval(m['accuracy_ic95'], '{:.1%}')}); {auc}; log loss {m['log_loss']:.4f}")
+        c = r["calibracion"][key]
+        parts = []
+        for name, label_c in (("brier", "Brier"), ("ece", "ECE (10 intervalos)"), ("intercept", "intercepto"), ("slope", "pendiente")):
+            e = c[name]["estimate"]
+            parts.append(f"{label_c} " + ("no calculable" if e is None else f"{e:.3f} ({interval(c[name]['ic95'], '{:.3f}')})"))
+        out("  Calibración: " + "; ".join(parts))
+        for row in r["selectiva"][key]:
+            acc = "sin partidas" if row["accuracy"] is None else f"accuracy {row['accuracy']:.1%} ({row['lo']:.1%} a {row['hi']:.1%})"
+            out(f"  Confianza >= {row['threshold']:.0%}: {row['n']} partidas ({row['coverage']:.1%}); {acc}")
+    d = r["diferencias"]["log_loss"]
+    out(f"Constante menos modelo final, log loss: {d['diferencia']:+.4f} (IC 95 %: {d['ic95'][0]:+.4f} a {d['ic95'][1]:+.4f}); positivo = mejor el modelo final.")
+    out("Candidato: referencia de deriva solamente. " + r["veredicto"])
+    record_test_run(r, models_dir, SECOND_RESULT_NAME)
+    out(f"Guardado en {models_dir / SECOND_RESULT_NAME}; repetir con los mismos datos no añade evidencia.")
+    return r
+
+
+def _read_test_runs(models_dir: Path, file_name: str = TEST_RESULT_NAME) -> list:
+    path = Path(models_dir) / file_name
     if not path.exists():
         return []
     return json.loads(path.read_text(encoding="utf-8")).get("runs", [])
 
 
-def record_test_run(result: dict, models_dir: Path = MODELS_DIR) -> int:
-    """Append this run to prueba_final.json and return how many runs there were before it."""
-    runs = _read_test_runs(models_dir)
+def record_test_run(result: dict, models_dir: Path = MODELS_DIR, file_name: str = TEST_RESULT_NAME) -> int:
+    """Append a nonempty run to its own result file; return the earlier run count."""
+    runs = _read_test_runs(models_dir, file_name)
+    if not result["n"]:
+        return len(runs)
     keep = ("n", "desde", "hasta", "por_tier", "excluidas_desarrollo", "excluidas_por_fecha", "modelos",
-            "diferencias", "veredicto")
-    runs.append({"fecha": datetime.now(timezone.utc).isoformat(timespec="seconds"), **{k: result[k] for k in keep}})
-    path = Path(models_dir) / TEST_RESULT_NAME
+            "diferencias", "veredicto", "excluidas_ajuste", "calibracion", "selectiva", "mejor", "poca_potencia", "modelo_trained_at")
+    runs.append({"fecha": datetime.now(timezone.utc).isoformat(timespec="seconds"), **{k: result[k] for k in keep if k in result}})
+    path = Path(models_dir) / file_name
     path.write_text(json.dumps({"runs": runs}, indent=2, ensure_ascii=False), encoding="utf-8")
     return len(runs) - 1
 
@@ -611,6 +710,13 @@ def _weak_signal_warning(bundle: dict, models_dir: Path = MODELS_DIR) -> str:
     text = ("Aviso: es una señal débil. En validación temporal el modelo tiene ROC AUC "
             f"{bundle['auc_temporal']:.3f} (IC 95 %: {low:.3f} a {high:.3f}); 0.5 equivale a adivinar. "
             "Esa cifra es optimista: las variables se eligieron con esas mismas partidas.")
+    second = [run for run in _read_test_runs(models_dir, SECOND_RESULT_NAME)
+              if run.get("modelo_trained_at") == bundle.get("trained_at")]
+    if second:
+        last = second[-1]
+        auc = last["modelos"]["final"]["auc"]
+        return text + (f" Segunda prueba independiente de este modelo ({last['fecha'][:10]}, n = {last['n']}): "
+                       + (f"ROC AUC {auc:.3f}." if auc is not None else "ROC AUC no calculable."))
     runs = _read_test_runs(models_dir)
     if not runs:
         return text + " Todavía no hay una prueba independiente."
@@ -728,12 +834,15 @@ def main():
                         help="once: keep the 22-variable model as base and fit the candidate on its 920 matches")
     parser.add_argument("--evaluate-new", action="store_true",
                         help="test the frozen candidate against the base on matches outside the development set")
+    parser.add_argument("--evaluate-final", action="store_true", help="segunda prueba del modelo final sin reentrenar")
     parser.add_argument("--train", action="store_true",
                         help="refit on every usable match and save modelo_final (after the test)")
     parser.add_argument("--force", action="store_true", help="with --train: skip the test-result check (contaminates the test)")
     parser.add_argument("--live", metavar="NAME#TAG", help="predict the game this player is in now")
     parser.add_argument("--score-log", action="store_true", help="compare logged live predictions with results")
     args = parser.parse_args()
+    if args.evaluate_final and any((args.freeze, args.train, args.live, args.score_log, args.evaluate_new, args.match_id)):
+        parser.error("--evaluate-final debe ejecutarse solo; no puede combinarse con entrenamiento ni otros comandos")
     if args.freeze:
         _freeze_command()
     elif args.train:
@@ -742,12 +851,14 @@ def main():
         _live_command(args.live)
     elif args.score_log:
         _score_log_command()
+    elif args.evaluate_final:
+        _guarded(evaluate_final_command)
     elif args.evaluate_new:
         _guarded(evaluate_new_command)
     elif args.match_id:
         _predict_command(args.match_id)
     else:
-        parser.error("give a match id, --freeze, --evaluate-new, --train, --live or --score-log")
+        parser.error("give a match id, --freeze, --evaluate-new, --evaluate-final, --train, --live or --score-log")
 
 
 if __name__ == "__main__":
