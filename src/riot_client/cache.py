@@ -19,6 +19,30 @@ from pathlib import Path
 #   __file__            = .../lol-win-predictor/src/riot_client/cache.py
 #   .resolve().parents[2] = .../lol-win-predictor
 CACHE_DIR = Path(__file__).resolve().parents[2] / "data" / "raw" / "matches"
+TIMELINE_CACHE_DIR = CACHE_DIR.parent / "timelines"
+
+
+def timeline_cache_path(match_id: str) -> Path:
+    return TIMELINE_CACHE_DIR / f"{match_id}.json.gz"
+
+
+def load_timeline(match_id: str) -> dict | None:
+    """Read a complete timeline, treating missing or damaged files as cache misses."""
+    try:
+        with gzip.open(timeline_cache_path(match_id), "rt", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, EOFError, ValueError):
+        return None
+
+
+def save_timeline(match_id: str, timeline: dict) -> None:
+    """Atomically save the full response in a directory separate from match details."""
+    path = timeline_cache_path(match_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(path.name + ".tmp")
+    with gzip.open(tmp_path, "wt", encoding="utf-8") as f:
+        json.dump(timeline, f)
+    os.replace(tmp_path, path)
 
 
 def cache_path(match_id: str) -> Path:

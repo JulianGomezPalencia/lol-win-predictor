@@ -3,6 +3,8 @@ Tests for Agent 4 (history builder). No real API calls.
 
 Run with:  pytest tests/test_history_builder.py -v
 """
+import sqlite3
+
 import pytest
 import requests
 
@@ -103,6 +105,47 @@ def test_build_histories_saves_rows_and_marks_done(tmp_path, fake_riot):
     assert db.count_target_matches_by_status(conn) == {"history_done": 1}
     assert conn.execute("SELECT COUNT(*) FROM player_history").fetchone()[0] == 2
     assert history_builder.build_histories(conn) == 0, "nothing left to do on a re-run"
+
+
+def test_build_histories_stores_the_history_of_all_10_players(tmp_path, monkeypatch):
+    players = [f"p{i}" for i in range(10)]
+    monkeypatch.setattr(endpoints, "get_match_ids",
+                        lambda puuid, count=5, start_time=None, end_time=None: [f"LA1_{puuid}_A", f"LA1_{puuid}_B"])
+    monkeypatch.setattr(endpoints, "get_match",
+                        lambda match_id: history_match(match_id, match_id.split("_")[1], TARGET_START - 5_000_000))
+    conn = db.connect(tmp_path / "t.sqlite")
+    db.add_target_match(conn, "LA1_T", "seed", "GOLD")
+    db.save_fetched_match(
+        conn, "LA1_T", {"game_start_ts": TARGET_START, "patch": "16.8", "blue_win": 1},
+        [{"puuid": puuid, "team_id": 100 if i < 5 else 200, "team_position": "MIDDLE", "champion_id": 7,
+          "champion_name": "Leblanc", "win": int(i < 5)} for i, puuid in enumerate(players)],
+    )
+
+    assert history_builder.build_histories(conn) == 1
+
+    rows = conn.execute("SELECT puuid, history_rank, history_match_id FROM player_history").fetchall()
+    assert len(rows) == 20, "2 games for each of the 10 players"
+    for puuid in players:
+        own = {row["history_rank"]: row["history_match_id"] for row in rows if row["puuid"] == puuid}
+        assert own == {0: f"LA1_{puuid}_A", 1: f"LA1_{puuid}_B"}
+
+
+def test_save_history_rolls_back_when_an_insert_fails(tmp_path):
+    path = tmp_path / "t.sqlite"
+    conn = db.connect(path)
+    db.add_target_match(conn, "LA1_T", "seed", "GOLD")
+    db.save_fetched_match(conn, "LA1_T", {"game_start_ts": TARGET_START, "patch": "16.8", "blue_win": 1}, [])
+    good = {"puuid": "me", "history_rank": 0,
+            **history_builder.summarize_for_player(history_match("LA1_A", "me", 123), "me")}
+    broken = {key: value for key, value in good.items() if key != "kills"} | {"history_rank": 1}
+
+    with pytest.raises(sqlite3.Error):
+        db.save_history(conn, "LA1_T", [good, broken])
+    conn.close()
+
+    conn = db.connect(path)  # reopen: only what was committed is still there
+    assert conn.execute("SELECT COUNT(*) FROM player_history").fetchone()[0] == 0, "the good row is undone too"
+    assert db.count_target_matches_by_status(conn) == {"fetched": 1}, "still waiting -> retried next run"
 
 
 def test_no_history_row_is_ever_after_its_target(tmp_path, fake_riot):

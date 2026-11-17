@@ -133,3 +133,150 @@ def test_usual_lane_tie_goes_to_the_most_recent_lane():
     assert build._usual_position(pd.Series(["UTILITY", "TOP", "UTILITY", "TOP"])) == "UTILITY"
     assert build._usual_position(pd.Series(["TOP", "", "UTILITY", "UTILITY"])) == "UTILITY"
     assert math.isnan(build._usual_position(pd.Series(["", None])))
+
+
+# --- inferred positions -------------------------------------------------------------------
+
+
+def make_spells(smite_player="100_JUNGLE"):
+    rows = []
+    for team in (BLUE, RED):
+        for pos in POSITIONS:
+            p = f"{team}_{pos}"
+            rows.append({"match_id": "M1", "player_id": p, "spell1_id": 11 if p == smite_player else 4, "spell2_id": 14})
+    return pd.DataFrame(rows)
+
+
+def positional_history(extra=()):
+    rows = []
+    for team in (BLUE, RED):
+        for pos in POSITIONS:
+            p = f"{team}_{pos}"
+            rows += [game(p, 0, 1, position=pos, days_before=1), game(p, 1, 0, position=pos, days_before=2)]
+    return pd.DataFrame(rows + list(extra))
+
+
+def inferred(participants, history, spells=None):
+    return build.inferred_participants(participants, history, make_matches(),
+                                       make_spells() if spells is None else spells)
+
+
+def test_inferred_positions_recover_history_roles():
+    result = inferred(make_participants().assign(team_position=""), positional_history())
+    assert (result["team_position"].values == [p.split("_")[1] for p in result["player_id"]]).all()
+
+
+def test_inferred_mode_ignores_riot_team_position():
+    history = positional_history()
+    base = inferred(make_participants(), history)
+    shuffled = make_participants().sample(frac=1, random_state=0).reset_index(drop=True)
+    shuffled["team_position"] = shuffled["team_position"].sample(frac=1, random_state=1).to_numpy()
+    wrong = make_participants().assign(team_position="TOP")
+    pd.testing.assert_series_equal(
+        base.set_index("player_id")["team_position"].sort_index(),
+        inferred(shuffled, history).set_index("player_id")["team_position"].sort_index())
+    feats = lambda parts: build.match_features(build.player_features(history, parts, make_matches()), make_matches())
+    pd.testing.assert_frame_equal(feats(base), feats(inferred(shuffled, history)))
+    pd.testing.assert_frame_equal(feats(base), feats(inferred(wrong, history)))
+
+
+def test_history_at_or_after_match_start_does_not_change_inferred_roles():
+    base = inferred(make_participants(), positional_history())
+    late = [game("100_TOP", 5 + i, 1, position="UTILITY", days_before=-i) for i in range(0, 4)]  # start >= START
+    late.append({**game("100_TOP", 9, 1, position="UTILITY", days_before=1), "remake": 1})      # remake
+    changed = inferred(make_participants(), positional_history(late))
+    assert (changed["team_position"].values == base["team_position"].values).all()
+
+
+def test_build_inferred_needs_the_spells_csv(tmp_path):
+    for name, frame in (("matches", make_matches()), ("participants", make_participants()), ("player_history", make_history())):
+        frame.to_csv(tmp_path / f"{name}.csv", index=False)
+    with pytest.raises(FileNotFoundError, match="export_dataset"):
+        build.build(tmp_path, inferred_positions=True)
+    default = build.build(tmp_path)  # default mode works without the new file and uses Riot's positions
+    assert len(default) == 1
+    make_spells().to_csv(tmp_path / "participant_spells.csv", index=False)
+    inferred_table = build.build(tmp_path, inferred_positions=True)
+    assert list(inferred_table.columns) == list(default.columns) and len(inferred_table) == 1
+
+
+# --- the three variables of the frozen set -----------------------------------------------------
+
+from src.features import champion_pool  # noqa: E402
+
+
+def make_pool(rows=()):
+    base = [{"game_start_ts": START - 5 * DAY, "champion_id": 1, "team_position": "TOP", "win": 1},
+            {"game_start_ts": START - 4 * DAY, "champion_id": 1, "team_position": "TOP", "win": 0},
+            {"game_start_ts": START - 3 * DAY, "champion_id": 1, "team_position": "MIDDLE", "win": 1}]
+    return pd.DataFrame(base + list(rows))
+
+
+def final_row(history, pool=None, matches=None, participants=None):
+    matches = make_matches() if matches is None else matches
+    feats = build.player_features(history, make_participants() if participants is None else participants, matches,
+                                  make_pool() if pool is None else pool)
+    return feats, build.match_features(feats, matches, final_features=True)
+
+
+def test_default_build_is_unchanged_and_new_columns_need_final_features(tmp_path):
+    matches, participants, history = make_matches(), make_participants(), make_history()
+    default = build.match_features(build.player_features(history, participants, matches), matches)
+    assert not [c for c in default.columns if "kills_medio" in c or "partidas_24h" in c or "campeon_posicion" in c]
+    assert len(build.feature_columns(default)) == 29
+    _, final = final_row(history)
+    assert set(build.FINAL_FEATURES) <= set(final.columns)
+    assert set(default.columns) < set(final.columns)
+    pd.testing.assert_frame_equal(final[list(default.columns)], default)  # old columns keep their values
+    assert build.SENSITIVITY_FEATURES == build.FINAL_FEATURES[:9]
+
+
+def test_final_features_without_a_pool_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="pool"):
+        build.build(tmp_path, final_features=True)
+
+
+def test_kills_mean_and_24h_count_by_hand():
+    player = f"{BLUE}_TOP"
+    rows = [game(player, 0, 1, kills=4), game(player, 1, 0, kills=2, days_before=3)]
+    boundary = [{**game(player, 2, 1, kills=0), "game_start_ts": START - DAY},        # exactly 24 h: not counted
+                {**game(player, 3, 1, kills=0), "game_start_ts": START - DAY + 1},    # 1 ms inside: counted
+                {**game(player, 4, 1, kills=0), "game_start_ts": START - DAY - 1}]    # 1 ms outside
+    feats, _ = final_row(pd.DataFrame(rows + boundary))
+    top = player_row(feats, player)
+    assert top["kills_medio"] == pytest.approx((4 + 2 + 0 + 0 + 0) / 5)
+    assert top["partidas_24h"] == 1
+    plain = player_row(final_row(pd.DataFrame(rows))[0], player)
+    assert plain["kills_medio"] == 3 and plain["partidas_24h"] == 0  # the 1-day-old game is exactly at the boundary
+    nobody = player_row(final_row(pd.DataFrame(rows))[0], f"{RED}_TOP")
+    assert math.isnan(nobody["kills_medio"]) and math.isnan(nobody["partidas_24h"]) and nobody["sin_historial"] == 1
+
+
+def test_champion_position_rate_in_the_table_uses_the_players_inferred_position_and_shrinks():
+    feats, _ = final_row(make_history())
+    look = champion_pool.ChampionPool(make_pool())
+    expected_top = look.champion_position_rate(1, "TOP", START)
+    expected_mid = look.champion_position_rate(1, "MIDDLE", START)
+    assert player_row(feats, f"{BLUE}_TOP")["winrate_campeon_posicion"] == pytest.approx(expected_top)
+    assert player_row(feats, f"{BLUE}_MIDDLE")["winrate_campeon_posicion"] == pytest.approx(expected_mid)
+    overall = 2 / 3
+    champion = (2 + 20 * overall) / (3 + 20)
+    assert expected_top == pytest.approx((1 + 20 * champion) / (2 + 20))
+
+
+def test_new_variables_ignore_games_and_pool_rows_at_or_after_the_match_start():
+    clean_feats, clean = final_row(make_history())
+    late_games = [{**game(f"{BLUE}_TOP", 9, 1, kills=50), "game_start_ts": START},
+                  {**game(f"{RED}_TOP", 9, 0, kills=50), "game_start_ts": START + DAY}]
+    late_pool = [{"game_start_ts": START, "champion_id": 1, "team_position": "TOP", "win": 0},
+                 {"game_start_ts": START + DAY, "champion_id": 1, "team_position": "TOP", "win": 0}]
+    leaked_feats, leaked = final_row(make_history(late_games), make_pool(late_pool))
+    pd.testing.assert_frame_equal(leaked[build.FINAL_FEATURES], clean[build.FINAL_FEATURES])
+
+
+def test_no_feature_reads_the_result_of_the_target_match():
+    _, base = final_row(make_history())
+    flipped_matches = make_matches().assign(blue_win=0)
+    flipped_players = make_participants().assign(win=lambda d: 1 - d["win"])
+    _, other = final_row(make_history(), matches=flipped_matches, participants=flipped_players)
+    pd.testing.assert_frame_equal(other.drop(columns=["blue_win"]), base.drop(columns=["blue_win"]))

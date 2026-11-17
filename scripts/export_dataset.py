@@ -11,17 +11,23 @@ What's exported (one CSV per table):
   player_history.csv    each player's ranked games BEFORE each target match (Agent 4)
   seed_players.csv      the players the sample was built from (Agent 1)
   player_snapshots.csv  today's rank of participants (Agent 5), if any were taken
+  participant_spells.csv  summoner spells of each participant, read from the cached match JSON in
+                        data/raw (no API calls). Used to infer roles before the game.
 
 Privacy: player IDs (PUUIDs) are replaced by a salted hash, so the files can't be linked back to a
 Riot account. The salt is generated once and stored in data/export_salt.txt (never committed), so
 the same player gets the same anonymous ID across re-exports.
 
-Safe to run while an agent is collecting: it copies a consistent snapshot of the database first.
+Safe to run while an agent is collecting: it copies a consistent snapshot of the database to a temporary
+file first (sqlite3 backup API) and reads EVERY table from that one copy, so the files never mix states.
 """
+import contextlib
 import csv
 import hashlib
 import secrets
 import sqlite3
+import tempfile
+from pathlib import Path
 
 from src.storage import db
 
@@ -58,26 +64,40 @@ def anonymize(puuid: str, salt: str) -> str:
     return "p_" + hashlib.sha256((salt + puuid).encode()).hexdigest()[:12]
 
 
-def snapshot_connection() -> sqlite3.Connection:
-    """A private in-memory copy of the database, so a running agent can't change it mid-export."""
-    source = sqlite3.connect(f"file:{db.DB_PATH}?mode=ro", uri=True, timeout=30)
-    copy = sqlite3.connect(":memory:")
-    source.backup(copy)
-    source.close()
-    return copy
+@contextlib.contextmanager
+def snapshot_connection(db_path=None):
+    """A private, consistent copy of the database in a temporary file, deleted on exit.
+
+    One snapshot must serve every table of an export; a running agent can't change it mid-export.
+    """
+    source = sqlite3.connect(f"file:{db_path or db.DB_PATH}?mode=ro", uri=True, timeout=30)
+    with tempfile.TemporaryDirectory(prefix="lol_snapshot_") as folder:
+        copy_path = Path(folder) / "snapshot.sqlite"
+        copy = sqlite3.connect(copy_path)
+        try:
+            source.backup(copy)
+        finally:
+            source.close()
+        reader = sqlite3.connect(copy_path)
+        copy.close()
+        try:
+            yield reader
+        finally:
+            reader.close()
 
 
-def export() -> dict[str, int]:
+def export(conn: sqlite3.Connection, export_dir=EXPORT_DIR) -> dict[str, int]:
+    """Write every table from the (snapshot) connection `conn`."""
     salt = load_salt()
-    conn = snapshot_connection()
-    EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    export_dir = Path(export_dir)
+    export_dir.mkdir(parents=True, exist_ok=True)
     counts = {}
     for name, sql in QUERIES.items():
         cursor = conn.execute(sql)
         columns = [col[0] for col in cursor.description]
         rows = cursor.fetchall()
         id_col = columns.index("player_id") if "player_id" in columns else None
-        with open(EXPORT_DIR / f"{name}.csv", "w", newline="", encoding="utf-8") as f:
+        with open(export_dir / f"{name}.csv", "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(columns)
             for row in rows:
@@ -86,13 +106,46 @@ def export() -> dict[str, int]:
                     row[id_col] = anonymize(row[id_col], salt)
                 writer.writerow(row)
         counts[name] = len(rows)
-    conn.close()
     return counts
 
 
+def export_spells(conn: sqlite3.Connection, export_dir=EXPORT_DIR, load_match=None) -> int:
+    """Write participant_spells.csv (match_id, player_id, spell1_id, spell2_id) from the cached match JSON.
+
+    Same salt and anonymisation as the other tables. The match ids come from match_participants
+    (from the snapshot `conn`); the spells from data/raw/matches. No API calls. Matches whose JSON is
+    not cached are skipped. Writes nothing else.
+    """
+    if load_match is None:
+        from src.riot_client import cache
+        load_match = cache.load_match
+    salt = load_salt()
+    match_ids = [r[0] for r in conn.execute("SELECT DISTINCT match_id FROM match_participants ORDER BY match_id")]
+    rows, skipped = [], 0
+    for match_id in match_ids:
+        match = load_match(match_id)
+        if match is None:
+            skipped += 1
+            continue
+        for p in match["info"]["participants"]:
+            rows.append([match_id, anonymize(p["puuid"], salt), p["summoner1Id"], p["summoner2Id"]])
+    if skipped:
+        print(f"AVISO: {skipped} partidas sin JSON en caché: no tienen hechizos y sus roles inferidos serán menos fiables.")
+    rows.sort(key=lambda r: (r[0], r[1]))
+    export_dir = Path(export_dir)
+    export_dir.mkdir(parents=True, exist_ok=True)
+    with open(export_dir / "participant_spells.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["match_id", "player_id", "spell1_id", "spell2_id"])
+        writer.writerows(rows)
+    return len(rows)
+
+
 def main():
-    for name, n in export().items():
-        print(f"{name}.csv: {n} rows")
+    with snapshot_connection() as conn:  # one snapshot for all the tables
+        for name, n in export(conn).items():
+            print(f"{name}.csv: {n} rows")
+        print(f"participant_spells.csv: {export_spells(conn)} rows")
     print(f"Written to {EXPORT_DIR}")
 
 

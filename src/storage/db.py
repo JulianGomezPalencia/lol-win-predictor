@@ -10,6 +10,7 @@ SQL answers those in one line. SQLite is a whole database in a single file
 Tests:
     pytest tests/test_db.py -v
 """
+import random
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = PROJECT_ROOT / "data" / "db" / "lol.sqlite"
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
+ROUND_ROBIN_SEED = 42
 
 
 def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
@@ -29,7 +31,16 @@ def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row  # rows behave like dicts: row["tier"] instead of row[1]
     conn.executescript(SCHEMA_PATH.read_text())
+    _add_missing_columns(conn)
     return conn
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    """Bring an older database up to date: CREATE TABLE IF NOT EXISTS never changes an existing table."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(target_matches)")}
+    if "invalid_reason" not in columns:
+        conn.execute("ALTER TABLE target_matches ADD COLUMN invalid_reason TEXT")
+        conn.commit()
 
 
 def upsert_player(conn: sqlite3.Connection, puuid: str, tier: str, division: str, lp: int) -> None:
@@ -99,9 +110,33 @@ def get_match_ids_by_status(conn: sqlite3.Connection, status: str) -> list[str]:
     return [row["match_id"] for row in rows]
 
 
-def mark_match_invalid(conn: sqlite3.Connection, match_id: str) -> None:
-    """Set this target match's status to 'invalid' (remake, wrong queue, ...)."""
-    conn.execute("UPDATE target_matches SET status = 'invalid' WHERE match_id = ?", (match_id,))
+def get_match_ids_round_robin(conn: sqlite3.Connection, status: str, limit: int | None = None) -> list[str]:
+    """Like get_match_ids_by_status, but a limited batch takes matches in turn from each seed_tier, in a
+    shuffled order inside each tier (fixed seed: same queue, same batch). So a limit neither keeps only
+    the first tiers discovered nor only the oldest matches: the batch spreads over tiers AND over time."""
+    rows = conn.execute("SELECT match_id, seed_tier FROM target_matches WHERE status = ? ORDER BY match_id",
+                        (status,)).fetchall()
+    if limit is None:
+        return [r["match_id"] for r in rows]
+    queues: dict[str, list[str]] = {}
+    for r in rows:
+        queues.setdefault(r["seed_tier"], []).append(r["match_id"])
+    ordered = [queues[t] for t in sorted(queues)]
+    shuffler = random.Random(ROUND_ROBIN_SEED)
+    for queue in ordered:
+        shuffler.shuffle(queue)
+    picked: list[str] = []
+    i = 0
+    while len(picked) < limit and any(i < len(q) for q in ordered):
+        picked.extend(q[i] for q in ordered if i < len(q))
+        i += 1
+    return picked[:limit]
+
+
+def mark_match_invalid(conn: sqlite3.Connection, match_id: str, reason: str) -> None:
+    """Set this target match's status to 'invalid' and record why (remake, wrong queue, ...)."""
+    conn.execute("UPDATE target_matches SET status = 'invalid', invalid_reason = ? WHERE match_id = ?",
+                 (reason, match_id))
     conn.commit()
 
 

@@ -11,6 +11,8 @@ It takes care of three things so the agents don't have to:
 Tests: pytest tests/test_client.py -v
 """
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 import requests
 
@@ -40,6 +42,36 @@ NETWORK_ERRORS = (
 # Remembers when the last request was sent. Starts at 0 = "long ago".
 # The leading underscore means "private to this file — don't use from outside".
 _last_call_time = 0.0
+_request_deadline = ContextVar("request_deadline", default=None)
+
+
+class RequestDeadlineExceeded(TimeoutError):
+    """Se agotó el plazo de vigilancia; no debe tratarse como un fallo de red."""
+
+
+@contextmanager
+def request_deadline(deadline):
+    token = _request_deadline.set(deadline)
+    try:
+        yield
+    finally:
+        _request_deadline.reset(token)
+
+
+def check_deadline():
+    deadline = _request_deadline.get()
+    if deadline is None:
+        return None
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise RequestDeadlineExceeded("Se agotó el plazo de vigilancia.")
+    return remaining
+
+
+def _sleep(seconds):
+    remaining = check_deadline()
+    time.sleep(seconds if remaining is None else min(seconds, remaining))
+    check_deadline()
 
 
 class RiotUnavailableError(RuntimeError):
@@ -55,7 +87,7 @@ def _wait_for_rate_limit() -> None:
     now = time.monotonic()
     elapsed = now - _last_call_time
     if elapsed < MIN_SECONDS_BETWEEN_CALLS:
-        time.sleep(MIN_SECONDS_BETWEEN_CALLS - elapsed)
+        _sleep(MIN_SECONDS_BETWEEN_CALLS - elapsed)
     _last_call_time = time.monotonic()
 
 
@@ -80,14 +112,18 @@ def get(url: str, params: dict | None = None) -> dict | list:
     started = time.monotonic()
     attempt = 0
     while True:
+        check_deadline()
         _wait_for_rate_limit()
+        remaining = check_deadline()
         try:
-            response = requests.get(url, headers=HEADERS, params=params, timeout=10)
+            response = requests.get(url, headers=HEADERS, params=params,
+                                    timeout=10 if remaining is None else min(10, remaining))
         except NETWORK_ERRORS as error:
             # A network blip (Wi-Fi drop, slow answer) is temporary, like a 5xx: wait and retry.
             problem = error
             wait = _backoff_seconds(attempt)
         else:
+            check_deadline()
             if response.status_code == 429:
                 problem = "429 rate limited"
                 wait = _retry_after_seconds(response) or _backoff_seconds(attempt)
@@ -98,6 +134,7 @@ def get(url: str, params: dict | None = None) -> dict | list:
                 response.raise_for_status()  # other 4xx: retrying won't help, let the caller decide
                 return response.json()
 
+        check_deadline()
         attempt += 1
         waited = time.monotonic() - started
         if waited + wait > MAX_OUTAGE_SECONDS:
@@ -106,4 +143,4 @@ def get(url: str, params: dict | None = None) -> dict | list:
                 f"Gave up on {url} after {attempt} attempts over {waited / 60:.0f} min "
                 f"(last problem: {problem})"
             )
-        time.sleep(wait)
+        _sleep(wait)

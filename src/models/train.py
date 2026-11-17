@@ -94,6 +94,8 @@ def bootstrap_auc_ci(y: np.ndarray, proba: np.ndarray, n_boot: int = 2000, seed:
         idx = rng.integers(0, len(y), len(y))
         if len(np.unique(y[idx])) == 2:  # a resample with one class only has no AUC
             values.append(roc_auc_score(y[idx], proba[idx]))
+    if not values:
+        raise ValueError("Se necesitan las dos clases para calcular el intervalo del ROC AUC.")
     low, high = np.percentile(values, [2.5, 97.5])
     return float(low), float(high)
 
@@ -112,6 +114,99 @@ def paired_accuracy_difference(y, proba_model, proba_baseline, n_boot: int = 200
     samples = rng.choice(diff, size=(n_boot, len(diff)), replace=True).mean(axis=1)
     low, high = np.percentile(samples, [2.5, 97.5])
     return {"diferencia": float(diff.mean()), "ic95": (float(low), float(high))}
+
+
+def paired_auc_difference(y, proba_a, proba_b, n_boot: int = 2000, seed: int = SEED) -> dict:
+    """ROC AUC of A minus B on the SAME matches, with a paired bootstrap interval."""
+    y, proba_a, proba_b = np.asarray(y), np.asarray(proba_a), np.asarray(proba_b)
+    rng = np.random.default_rng(seed)
+    samples = []
+    for _ in range(n_boot):
+        idx = rng.integers(0, len(y), len(y))
+        if len(np.unique(y[idx])) == 2:  # a resample with one class only has no AUC
+            samples.append(roc_auc_score(y[idx], proba_a[idx]) - roc_auc_score(y[idx], proba_b[idx]))
+    if len(np.unique(y)) < 2 or not samples:
+        raise ValueError("Se necesitan las dos clases para calcular la diferencia de ROC AUC.")
+    low, high = np.percentile(samples, [2.5, 97.5])
+    return {"diferencia": float(roc_auc_score(y, proba_a) - roc_auc_score(y, proba_b)),
+            "ic95": (float(low), float(high))}
+
+
+def paired_log_loss_difference(y, proba_base, proba_new, n_boot: int = 2000, seed: int = SEED) -> dict:
+    """Log loss of the base minus the new model on the SAME matches (positive = the new one is better),
+    with a paired bootstrap interval: the matches are resampled once and both losses recomputed."""
+    y = np.asarray(y)
+    base = np.clip(np.asarray(proba_base, dtype=float), 1e-6, 1 - 1e-6)
+    new = np.clip(np.asarray(proba_new, dtype=float), 1e-6, 1 - 1e-6)
+    loss = lambda p: -(y * np.log(p) + (1 - y) * np.log(1 - p))
+    diff = loss(base) - loss(new)
+    rng = np.random.default_rng(seed)
+    samples = rng.choice(diff, size=(n_boot, len(diff)), replace=True).mean(axis=1)
+    low, high = np.percentile(samples, [2.5, 97.5])
+    return {"diferencia": float(diff.mean()), "ic95": (float(low), float(high))}
+
+
+def selective_accuracy(y, p, thresholds=(0.55, 0.60, 0.65)) -> pd.DataFrame:
+    """Confidence-selected accuracy with Wilson 95% intervals; empty subsets are undefined."""
+    y, p = np.asarray(y), np.asarray(p, dtype=float)
+    rows = []
+    z = 1.959963984540054
+    for threshold in thresholds:
+        mask = np.maximum(p, 1 - p) >= threshold
+        n = int(mask.sum())
+        accuracy = float(np.mean((p[mask] >= .5) == y[mask])) if n else None
+        low = high = None
+        if n:
+            denominator = 1 + z*z/n
+            center = (accuracy + z*z/(2*n))/denominator
+            half = z*np.sqrt(accuracy*(1-accuracy)/n + z*z/(4*n*n))/denominator
+            low, high = center-half, center+half
+        rows.append(dict(threshold=threshold, n=n, coverage=n/len(y) if len(y) else 0.,
+                         accuracy=accuracy, lo=low, hi=high))
+    return pd.DataFrame(rows)
+
+
+def calibration_summary(y, p, n_bins=10, n_boot=500, seed=SEED) -> dict:
+    """Brier, fixed-width ECE and joint logistic recalibration, with match bootstrap CIs.
+
+    Recalibration is diagnostic only. Its coefficients are undefined with one outcome
+    class or constant predictions; those estimates and intervals are returned as None.
+    """
+    from scipy.optimize import minimize
+    from scipy.special import logit
+    y, p = np.asarray(y), np.asarray(p, dtype=float)
+    if not len(y) or y.shape != p.shape or not np.isfinite(p).all() or ((p < 0) | (p > 1)).any():
+        raise ValueError("Se necesitan resultados y probabilidades válidas, no vacíos y alineados.")
+    if n_bins < 1 or n_boot < 1:
+        raise ValueError("n_bins y n_boot deben ser positivos.")
+
+    def estimates(a, q):
+        bins = np.minimum((q*n_bins).astype(int), n_bins-1)
+        ece = sum(np.sum(bins == i)*abs(q[bins == i].mean()-a[bins == i].mean())
+                  for i in range(n_bins) if np.any(bins == i))/len(a)
+        intercept = slope = np.nan
+        if len(np.unique(a)) == 2 and len(np.unique(q)) > 1:
+            z = logit(np.clip(q, 1e-8, 1-1e-8))
+            fit = minimize(lambda b: np.mean(np.logaddexp(0, b[0]+b[1]*z)-a*(b[0]+b[1]*z)),
+                           [0, 1], method="BFGS")
+            if np.isfinite(fit.x).all():
+                intercept, slope = fit.x
+        return np.array([np.mean((a-q)**2), ece, intercept, slope])
+
+    values = estimates(y, p)
+    rng = np.random.default_rng(seed)
+    samples = []
+    for _ in range(n_boot):
+        idx = rng.integers(len(y), size=len(y))
+        samples.append(estimates(y[idx], p[idx]))
+    samples = np.asarray(samples)
+    result = {}
+    for j, name in enumerate(("brier", "ece", "intercept", "slope")):
+        valid = samples[:, j][np.isfinite(samples[:, j])]
+        result[name] = {"estimate": float(values[j]) if np.isfinite(values[j]) else None,
+                        "ic95": tuple(float(v) for v in np.percentile(valid, [2.5, 97.5]))
+                        if len(valid) and np.isfinite(values[j]) else None}
+    return result
 
 
 def evaluate(y: pd.Series, proba: np.ndarray) -> dict:
@@ -164,7 +259,8 @@ def temporal_validation(table: pd.DataFrame, n_splits: int = 5) -> dict:
     precise estimate, not an independent confirmation of it.
 
     Returns the pooled metrics table, the ROC AUC of each round (the majority baseline predicts one
-    constant per round, so it has none), and the pooled answers and probabilities.
+    constant per round, so it has none), the pooled answers and probabilities, and the pooled
+    seed_tier of each prediction (aligned with "y" and "probabilidades").
     """
     ordered = table.sort_values("game_start_ts", kind="stable").reset_index(drop=True)
     features = feature_columns(ordered)
@@ -172,11 +268,12 @@ def temporal_validation(table: pd.DataFrame, n_splits: int = 5) -> dict:
     names = ["Siempre la clase mayoritaria", "Regresión logística", "Bosque aleatorio"]
     collected = {name: [] for name in names}
     auc_per_round = {name: [] for name in names}
-    answers = []
+    answers, tiers = [], []
     for train_idx, test_idx in TimeSeriesSplit(n_splits=n_splits).split(X):
         X_tr, y_tr, y_te = X.iloc[train_idx], y.iloc[train_idx], y.iloc[test_idx]
         weights = tier_weights(ordered["seed_tier"].iloc[train_idx])
         answers.append(y_te.to_numpy())
+        tiers.append(ordered["seed_tier"].iloc[test_idx].to_numpy())
         predictions = {"Siempre la clase mayoritaria": baseline_majority(y_tr, len(test_idx))}
         for name, search in (("Regresión logística", logistic_model()), ("Bosque aleatorio", forest_model())):
             search.fit(X_tr, y_tr, model__sample_weight=weights)
@@ -194,7 +291,80 @@ def temporal_validation(table: pd.DataFrame, n_splits: int = 5) -> dict:
     metrics["Siempre la clase mayoritaria"]["roc_auc_ic95"] = (float("nan"), float("nan"))
     per_round = pd.DataFrame(auc_per_round, index=[f"corte {i + 1}" for i in range(n_splits)]).round(3)
     return {"tabla": metrics_table(metrics), "auc_por_corte": per_round,
-            "y": y_all, "probabilidades": probabilities}
+            "y": y_all, "probabilidades": probabilities,
+            "seed_tier": np.concatenate(tiers)}
+
+
+# Three bands of seed_tier for the per-tier check (labels in Spanish, as in the notebook).
+TIER_BANDS = {
+    "Hierro a Platino": ["IRON", "BRONZE", "SILVER", "GOLD", "PLATINUM"],
+    "Esmeralda y Diamante": ["EMERALD", "DIAMOND"],
+    "Maestro o superior": ["MASTER", "GRANDMASTER", "CHALLENGER"],
+}
+
+
+def metrics_by_tier_band(y, proba, tiers) -> pd.DataFrame:
+    """Accuracy and ROC AUC (each with a bootstrap 95 % interval) for each band of TIER_BANDS.
+
+    Caveat: seed_tier is the tier of the player through whom the match was found, NOT of all ten
+    players. A match found through a Gold player can still contain Diamond players.
+
+    A band with no matches gets NaN everywhere; a band whose matches all have the same result
+    keeps its accuracy but gets NaN for the ROC AUC and its interval. A tier that belongs to no
+    band raises ValueError.
+    """
+    y, proba, tiers = np.asarray(y), np.asarray(proba, dtype=float), np.asarray(tiers)
+    band_of = {tier: band for band, members in TIER_BANDS.items() for tier in members}
+    unknown = sorted({str(t) for t in tiers if t not in band_of})
+    if unknown:
+        raise ValueError(f"tier(s) not in any band: {unknown}")
+    bands = np.array([band_of[t] for t in tiers], dtype=object)
+    nan2 = (float("nan"), float("nan"))
+    rows = []
+    for band in TIER_BANDS:
+        mask = bands == band
+        yb, pb = y[mask], proba[mask]
+        acc, acc_ci, auc, auc_ci = float("nan"), nan2, float("nan"), nan2
+        if len(yb):
+            pred = (pb >= 0.5).astype(int)
+            acc, acc_ci = float(accuracy_score(yb, pred)), bootstrap_accuracy_ci(yb, pred)
+            if len(np.unique(yb)) == 2:
+                auc, auc_ci = float(roc_auc_score(yb, pb)), bootstrap_auc_ci(yb, pb)
+        rows.append({"banda": band, "partidas": int(mask.sum()), "accuracy": acc,
+                     "ic95_bajo": acc_ci[0], "ic95_alto": acc_ci[1], "roc_auc": auc,
+                     "auc_ic95_bajo": auc_ci[0], "auc_ic95_alto": auc_ci[1]})
+    return pd.DataFrame(rows).set_index("banda").round(3)
+
+
+def position_features(features: list[str]) -> list[str]:
+    """The variables that compare a player's team_position in the match with their usual lane."""
+    return [name for name in features if "en_linea_habitual" in name or "fuera_de_posicion" in name]
+
+
+def position_sensitivity(table: pd.DataFrame, n_splits: int = 5) -> dict:
+    """How much of the logistic regression's signal depends on the position variables?
+
+    Riot fills in teamPosition AFTER the game, from what each player did, and the API doesn't give
+    the role from champion select. A player who left their lane during a game could therefore look
+    "off-role" because of how that game went, which would be a leak we can't rule out directly.
+    Repeating the walk-forward without those variables shows how much the result relies on them.
+    The lane-against-lane variables that remain still use team_position to pair the opponents.
+    """
+    name = "Regresión logística"
+    all_variables = temporal_validation(table, n_splits)
+    without = temporal_validation(table.drop(columns=position_features(feature_columns(table))), n_splits)
+    rows = {"Con todas las variables": all_variables["tabla"].loc[name],
+            "Sin variables de posición": without["tabla"].loc[name]}
+    return {"tabla": pd.DataFrame(rows).T,
+            "diferencia_auc": paired_auc_difference(all_variables["y"], all_variables["probabilidades"][name],
+                                                    without["probabilidades"][name])}
+
+
+def final_model_tier_check(table: pd.DataFrame, n_splits: int = 5) -> pd.DataFrame:
+    """metrics_by_tier_band for the variable set of the SAVED model (no position variables)."""
+    reduced = table.drop(columns=position_features(feature_columns(table)))
+    walk = temporal_validation(reduced, n_splits)
+    return metrics_by_tier_band(walk["y"], walk["probabilidades"]["Regresión logística"], walk["seed_tier"])
 
 
 def metrics_table(metrics: dict) -> pd.DataFrame:
@@ -229,6 +399,19 @@ def main():
                                         walk["probabilidades"]["Siempre la clase mayoritaria"])
     low, high = paired["ic95"]
     print(f"\nRegresión logística menos línea base (accuracy): {paired['diferencia']:+.3f} (IC 95 %: {low:+.3f} a {high:+.3f})")
+    print()
+    print("Sensibilidad a las variables de posición (regresión logística):")
+    sensitivity = position_sensitivity(table)
+    print(sensitivity["tabla"].to_string())
+    difference = sensitivity["diferencia_auc"]
+    low, high = difference["ic95"]
+    print(f"Con todas menos sin posición (ROC AUC): {difference['diferencia']:+.3f} (IC 95 %: {low:+.3f} a {high:+.3f})")
+    print()
+    print("Regresión logística por banda de rango (validación temporal; rango = el del jugador semilla):")
+    print(metrics_by_tier_band(walk["y"], walk["probabilidades"]["Regresión logística"], walk["seed_tier"]).to_string())
+    print()
+    print("Lo mismo con las variables del modelo final (sin posición):")
+    print(final_model_tier_check(table).to_string())
 
 
 if __name__ == "__main__":

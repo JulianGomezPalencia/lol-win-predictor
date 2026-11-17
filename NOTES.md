@@ -1,95 +1,118 @@
-# Notes / TODO
+# Diario de desarrollo
 
-Things to fix or improve later. Check items off as they're done.
+## 2026-10-20
 
-## Fixes
+Corregimos los reintentos del cliente HTTP para evitar esperas después del último
+intento y reanudar descargas interrumpidas. Guardamos los datos originales en caché
+y separamos recolección, historiales y exportación. Las consultas de historial
+usan solo partidas anteriores a la partida objetivo.
 
-- [x] **`client.get()` wastes a sleep on the last attempt** — fixed, with a test. `get()` now also retries network errors (Wi-Fi drops, timeouts). (`src/riot_client/client.py`)
-  When the final attempt gets a 429 or 5xx, `get()` still sleeps (Retry-After or backoff)
-  before the loop ends and raises `RuntimeError`, so that wait is pointless.
-  Idea: only sleep if there's another attempt left (`attempt < MAX_RETRIES - 1`).
-  Add a test first: with `MAX_RETRIES` responses of 500, the last one should not trigger a sleep.
+## 2026-10-26
 
-## Data design
+Evaluamos 920 partidas con 29 diferencias entre equipos. La división temporal usó
+736 para ajuste y 184 para prueba. La logística acertó 56,0 % en esa prueba
+(IC 95 % de 49 a 63). En validación hacia adelante tuvo AUC 0,571
+(0,532 a 0,611). El bosque aleatorio no mejoró la logística.
+La diferencia de acierto frente a la clase mayoritaria no fue concluyente.
 
-- [x] **Unranked match participants** — done in Agent 5: `player_snapshots` rank columns allow NULL. (still in placements / no ranked games this season)
-  Seed players are always ranked (league-v4 only lists ranked players), so `players.lp NOT NULL`
-  is correct — checked: 400 players, 0 nulls, 18 with lp = 0 (valid, just placed / demoted).
-  But the other 9 players in each match may be unranked: league-v4 by-puuid returns `[]` for them.
-  When we store participants' rank/LP (Agent 4), those columns must allow NULL.
-  For the model, consider an `is_unranked` feature (1/0) — being unranked is itself a signal
-  (placements, returning player, smurf).
+## 2026-11-04
 
-- [ ] **Target matches are unbalanced across tiers** (found after the first discovery run, 954 matches)
-  Seeds are balanced (40 players/tier), but high-elo players play much more in 14 days:
-  MASTER 160, GRANDMASTER 159, CHALLENGER 149, DIAMOND 129 … BRONZE 42.
-  Almost half the dataset comes from Master+, which is ~1% of the real player base.
-  Options: cap matches per seed_tier when training (sample equally), and/or seed more
-  low-elo players. Check this again before training the model.
+Revisamos posiciones inferidas y predicción en vivo. Dejamos de depender de la
+posición que Riot asigna al terminar la partida. Unificamos el cálculo para
+partidas jugadas y partidas en curso, a partir de campeones, hechizos e historial.
+El rango consultado después de jugar se conserva como contexto, no como variable.
 
-## From the code review (2026-10-20)
+## 2026-11-05
 
-Reviewer 1 reviewed the whole repo; Reviewer 2 verified each finding against the code.
-Confirmed fixes were applied. These were judged real but not urgent:
+Congelamos diez variables y la receta de regresión logística. Las 1.206 partidas
+usadas durante el desarrollo ya no podían servir como prueba independiente.
+Ajustamos el candidato con las mismas 920 del modelo base y reservamos partidas
+posteriores. Incluimos las otras 286 en la lista de desarrollo para excluirlas
+de las pruebas. El pipeline usa imputación por mediana y escalado antes de la
+logística. La comparación por nueve variables se mantuvo como sensibilidad.
 
-- [ ] **Check history completeness before feature engineering.** A target is marked `history_done`
-  whatever number of rows it got. Fewer than 10 per player is legitimate (new accounts), but run:
-  `SELECT target_match_id, COUNT(*) FROM player_history GROUP BY 1 ORDER BY 2` and look at the low end.
-- [ ] **Decide whether remakes count toward the 10 history games.** Right now a remake takes a slot
-  (it's stored with `remake = 1`). Option: request more than 10 IDs and keep the first 10 non-remakes.
-- [ ] **History games only store the player's own side.** By design (see schema.sql), the other 9
-  players of a history game aren't in `match_participants`. The full JSON is cached, so this can be
-  backfilled if a feature ever needs it.
-- [ ] **Champion mastery gap.** Agent 5 snapshots each player once. If a later discovery run adds
-  matches where they play a different champion, that champion's mastery is never fetched.
-- [ ] **Store why a match is invalid.** `mark_match_invalid` drops the reason (remake / wrong queue /
-  missing position / not found). Needs a new column: `CREATE TABLE IF NOT EXISTS` won't add it to
-  the existing database, so it needs an `ALTER TABLE target_matches ADD COLUMN invalid_reason TEXT`.
-- [ ] **More tests:** `save_history` rolling back when an insert fails; a history test with all
-  10 participants instead of 1.
-- **One process at a time** (documented in README): the 1.25 s spacing lives inside each process,
-  so two agents running at once would exceed 100 requests / 2 minutes.
+## 2026-11-09
 
-- [x] **Riot's firewall blocks some players** (found 2026-10-21). Cloudflare, in front of the API,
-  answers an HTML 403 for any URL whose PUUID contains `--` (it looks like an SQL comment), and
-  URL-encoding the dashes doesn't help. 111 of 5,602 participants (2 %) are affected. Agents 4 and 5 now
-  skip those players before asking (`endpoints.is_firewall_blocked(puuid)`), and print how many
-  were skipped. Any other 403 — Riot's own, or the firewall blocking us for another reason —
-  still stops the run, so empty histories are never saved by mistake.
-  For the model: their history is unknown (not "no games"); add an `is_history_missing` flag.
+Fijamos la segunda prueba antes de consultar sus resultados. Conservamos el modelo
+probado y separamos el reajuste posterior. Evaluamos el aporte de la tasa global
+de victoria de campeones con información disponible antes del juego. No mejoró
+la pérdida logarítmica y no entró en la receta.
 
-- [x] **History run crashed on network drops** (found 2026-10-21). `Gave up on .../matches/LA1_...
-  after 3 attempts`: the connection was being reset (`Connection reset by peer`), and 3 attempts
-  only covered ~3 seconds. `get()` now keeps retrying network errors, 5xx and 429 for up to
-  30 minutes (`MAX_OUTAGE_SECONDS`, waits 1, 2, 4 … 60 s), also retries answers cut off or damaged
-  in transit, and reads a missing/odd Retry-After safely. If it still fails it raises
-  `RiotUnavailableError`, and `run_pipeline` stops with a clear message: just run it again.
+## 2026-11-11
 
-## First model results (2026-10-26)
+La segunda prueba incluyó 1.264 partidas nuevas. El modelo final acertó 57,04 % y
+obtuvo AUC 0,5891. Los resultados completos están en
+`data/models/segunda_prueba.json`. Evaluamos premade, composición, variables por
+rol y un modelo no lineal solo sobre las 2.973 partidas de ajuste. Ninguna familia
+cumplió la regla de mejora y no hicimos una tercera prueba.
 
-920 matches, 29 blue-minus-red features (team averages + lane against lane). Chronological split
-736 train / 184 test; the test set covers less than a day (2026-10-09 23:13 to 2026-10-10 16:34).
+Conservamos las probabilidades sin recalibrar. La ganancia estimada de pérdida
+por recalibración fue 0,000293, IC 95 % de −0,000766 a 0,001344.
+La confianza es el mayor valor entre p y 1-p. Por debajo de 55 % no damos un
+favorito. Los umbrales de 55, 60 y 65 % tuvieron 699, 275 y 84 partidas en la
+segunda prueba y aciertos de 59,51, 65,82 y 67,86 %. Son resultados de grupos,
+no garantías sobre una partida individual.
 
-| | Test accuracy (95 % CI) | Walk-forward accuracy, 765 preds | Walk-forward ROC AUC (95 % CI) |
-|---|---|---|---|
-| Always majority class | 53.3 % (46–60) | 51.6 % | — |
-| Logistic regression (C=0.01) | 56.0 % (49–63) | 54.6 % | 0.571 (0.532–0.611) |
-| Random forest (depth 6) | 52.2 % (45–60) | 53.2 % | 0.559 (0.518–0.597) |
+El reajuste conserva una copia fechada del modelo anterior con verificación de
+SHA-256. Las cifras históricas siguen atribuidas a la versión probada.
+La vigilancia omite partidas repetidas, limita su tiempo y cuenta errores sin
+mostrar datos personales. El modo de consulta de la interfaz no guarda el Riot ID.
+Corregimos la recuperación del contexto, la propagación del plazo a reintentos
+y el manejo de errores durante la vigilancia.
 
-- Weak but real ranking signal: walk-forward AUC 0.571, above 0.5 in 4 of 5 rounds (0.501 in the 4th).
-- It does NOT turn into better predictions: logistic minus baseline accuracy, paired on the same
-  matches, is +3.0 pp (95 % CI −1.3 to +7.1); log loss and Brier equal a constant prediction.
-- The walk-forward's last round overlaps the final test set: more precise, not independent.
-- Strongest variables: days since the last game (longer break -> slightly fewer wins), team KDA
-  difference, support-vs-support KDA. Some coefficients have the "wrong" sign (support win rate): noise.
-- The random forest doesn't beat the logistic regression: too little data to find interactions.
-- Review (2026-10-26) items left as documented choices: tier weights only in the fit (weighted
-  scoring picks the same hyperparameters); sin_historial can't tell firewall-blocked players from new
-  ones (~1 %); prediction assumes champion select is over (champion and position known).
+## Trabajo del 2026-11-16
 
-## Ideas
+Añadimos la descarga reanudable de líneas de tiempo, los modelos de estado por
+minuto y la interfaz con cuatro pestañas. Preparamos doce ejemplos locales para
+recorrer partidas sin credenciales. Conservamos las diez variables y la receta
+del modelo previo. Corregimos el informe según la revisión y el cotejo de citas,
+separamos su trazabilidad y copiamos las figuras nuevas al directorio de entrega.
+Reejecutamos el notebook con el export del 9 de noviembre y añadimos la lectura
+de las tablas de estado, remontadas y objetivos.
 
-- [ ] **More data.** The matches cover two weeks only. Re-running `--steps discover` later adds
-  newer matches (and a longer test period); the history step is the slow part (~110 calls/match).
-- [ ] **Rank at match time.** Riot has no historical rank endpoint. A proxy could be the average
-  rank of the seed player's league, or LP gained/lost in the history games (not in match-v5).
+Los resultados siguientes se conservan en las tablas de `data/analysis/`.
+El estado acertó 61,78 % al minuto 5 (IC 95 % de 57,21 a 66,35, n = 416) y
+78,16 % al minuto 15 (74,27 a 81,80, n = 412). En las mismas 416 partidas del
+minuto 5, el previo acertó 54,57 % (49,52 a 59,62). Comparamos los dos modelos
+en las mismas partidas dentro de cada minuto. La población cambió entre minutos.
+Añadir el previo al estado no dio una mejora concluyente. Al minuto 10 la reducción
+de pérdida fue 0,0052 (−0,0069 a 0,0171).
+
+Contamos 787 remontadas entre 2.780 partidas sin empate al minuto 15,
+28,31 % (26,67 a 30,01). El equipo con primera sangre ganó 56,29 %
+(56,06 a 56,51, n = 180.130), con primera torre 68,28 %
+(68,06 a 68,49, n = 177.993) y con primer dragón 61,57 %
+(61,35 a 61,80, n = 179.245). Cuando un mismo equipo obtuvo los tres,
+ganó 49.531 de 64.127 partidas, 77,24 % (76,91 a 77,56).
+El primer barón se asoció con 79,79 % (79,58 a 80,00, n = 137.665)
+y el primer inhibidor con 89,18 % (89,02 a 89,33, n = 159.560).
+Todos estos intervalos son del 95 %. Las tasas de objetivos son asociaciones,
+con denominadores distintos, y no permiten afirmar efectos causales.
+
+Descargamos 2.820 líneas de tiempo y entrenamos los modelos por minuto con el corte
+2026-11-09T18:09:41+00:00. Completamos una hora de vigilancia en vivo. Al corte del
+16 de noviembre de 2026 a las 20:22, hora local de Colombia, el registro tenía
+33 partidas, 27 terminadas y puntuadas y 6 sin terminar. Acertamos 12 de 27
+(44,4 %), con pérdida logarítmica 0,7024 y AUC 0,516. Con confianza de al menos
+55 %, hubo 15 partidas y 60,0 % de acierto (Wilson 95 % de 35,7 % a 80,2 %).
+La muestra es demasiado pequeña para concluir. La fuente es
+`data/predictions/live_log.csv` y la salida de `python -m src.models.predict --score-log`
+de ese corte. La batería completa terminó con 325 pruebas aprobadas y la interfaz
+cargó sus cuatro pestañas.
+
+## Trabajo del 2026-11-17
+
+Preparamos una demostración pública para usar la interfaz desde un clon sin datos
+privados ni credenciales. El modelo previo distribuido conserva solo el pipeline
+y las diez variables. El modelo por minuto conserva sus parámetros y omite la
+lista de partidas usadas para ajustar. Numeramos los ejemplos y quitamos las
+columnas de procedencia de las tablas. Los nombres de campeones vienen del
+catálogo público del parche 16.22.1.
+
+Trasladamos los tres scripts de análisis a `scripts/analisis/` y conservamos sus
+cálculos y guardias. Las salidas quedan bajo `data/analysis/`. Añadimos el protocolo
+para conservar las decisiones fijadas antes de la evaluación original.
+No repetimos esos análisis ni entrenamos modelos. La demo se regenera con
+`python scripts/build_demo.py`, que lee los productos locales y escanea su salida.
+Las pruebas de `tests/test_demo.py` cubren carga sin datos locales, predicción,
+explicaciones y ausencia de identificadores en los archivos públicos.

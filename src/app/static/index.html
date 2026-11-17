@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
+    <title>¿Quién gana? · League of Legends</title>
+    <link rel="stylesheet" href="/static/app.css" />
+    <script defer src="/static/vendor/chart.umd.js"></script>
+    <script defer src="/static/app.js"></script>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/">La partida en números</a
+      ><button id="present">Presentar <kbd>P</kbd></button>
+    </header>
+    <nav aria-label="Vistas">
+      <button data-view="0" aria-current="page">¿Quién gana?</button
+      ><button data-view="1">Cuándo se decide</button
+      ><button data-view="2">Repetición</button
+      ><button data-view="3">Objetivos</button
+      ><button data-view="4">Calculadora</button
+      ><button data-view="5">Partida en vivo</button
+      ><button data-view="6">Qué aprendimos</button>
+    </nav>
+    <main>
+      <section id="view-0">
+        <h1>¿Quién gana?</h1>
+        <p class="intro">
+          Diez campeones. Dos equipos. Tu voto antes de empezar.
+        </p>
+        <label
+          >Partida de la prueba
+          <select id="example"></select
+        ></label>
+        <div id="teams" class="teams"></div>
+        <div class="reveal">
+          <button id="prediction">Ver qué dice el modelo</button
+          ><button id="winner" class="secondary">Ver quién ganó</button
+          ><button id="reset-votes" class="secondary">Reiniciar votos</button>
+        </div>
+        <p id="prediction-result" class="result" aria-live="polite"></p>
+        <p id="winner-result" class="result" aria-live="polite"></p>
+        <p class="note">
+          Medias por equipo del historial anterior a la partida. El KDA compara
+          asesinatos y asistencias con muertes. Las partidas con el campeón se
+          cuentan en ese historial. El modelo usa diez diferencias entre equipos.
+        </p>
+      </section>
+      <section id="view-1" hidden>
+        <h1>Cuándo se decide</h1>
+        <div class="headline">
+          <span><strong>57 %</strong> antes de jugar</span
+          ><span><strong>81 %</strong> al minuto 25</span>
+        </div>
+        <div class="chart">
+          <canvas
+            id="accuracy"
+            role="img"
+            aria-label="Acierto del estado de juego frente al modelo previo en las mismas partidas"
+          ></canvas>
+        </div>
+        <div id="accuracy-summary" aria-label="Acierto por minuto"></div>
+        <p class="note">
+          El 57 % corresponde a 1.264 partidas nuevas. Las dos curvas usan las
+          mismas partidas en cada minuto. La muestra cambia al terminar partidas
+          y no fija un minuto universal.
+        </p>
+      </section>
+      <section id="view-2" hidden>
+        <h1>Una partida, minuto a minuto</h1>
+        <div class="replay-controls">
+          <label
+            >Ejemplo
+            <select id="replay-example"></select></label
+          ><button id="replay-reset" class="secondary">Volver al inicio</button
+          ><button id="step">Avanzar un minuto</button>
+        </div>
+        <div class="headline">
+          <span><strong id="minute">0</strong> minuto</span
+          ><span class="blue"
+            ><strong id="probability">…</strong> probabilidad del azul</span
+          >
+          <p id="pause" aria-live="polite"></p>
+        </div>
+        <div class="chart">
+          <canvas
+            id="replay"
+            role="img"
+            aria-label="Probabilidad del azul hasta el minuto mostrado"
+          ></canvas>
+        </div>
+        <p id="events" aria-live="polite"></p>
+      </section>
+      <section id="view-3" hidden>
+        <h1>¿Qué objetivos acompañan la victoria?</h1>
+        <p class="intro">
+          Victoria del equipo que consiguió primero cada objetivo.
+        </p>
+        <div id="objectives"></div>
+        <p class="note">
+          Son asociaciones. Los equipos que van ganando también consiguen más
+          objetivos. Cada tasa usa solo partidas con un primer equipo válido.
+        </p>
+      </section>
+      <section id="view-4" hidden>
+        <h1>Prueba tu propio escenario</h1>
+        <p class="intro">
+          Diferencias del historial: promedio azul menos promedio rojo. Cero
+          significa igualdad.
+        </p>
+        <form id="calculator">
+          <div id="fields" class="fields"></div>
+          <button type="submit">Calcular probabilidad</button>
+        </form>
+        <p id="calculation" class="result" aria-live="polite"></p>
+        <ol id="factors"></ol>
+      </section>
+      <section id="view-5" hidden>
+        <h1>Partida en vivo</h1>
+        <p id="live-status"></p>
+        <form id="live-form" hidden>
+          <label
+            >Nombre y etiqueta
+            <input
+              id="player"
+              autocomplete="off"
+              placeholder="Nombre#Etiqueta"
+              maxlength="80"
+              required /></label
+          ><button type="submit">Consultar partida</button>
+        </form>
+        <p id="live-result" class="result" aria-live="polite"></p>
+      </section>
+      <section id="view-6" hidden>
+        <h1>Qué aprendimos</h1>
+        <div class="lessons">
+          <p>
+            <strong>57 %</strong> en 1.264 partidas nuevas. Evaluar con datos
+            futuros cambia lo que podemos afirmar.
+          </p>
+          <p>
+            <strong>78 %</strong> al minuto 15. El estado de juego aporta más
+            información que el historial previo.
+          </p>
+          <p>
+            <strong>28 %</strong> de remontadas entre equipos abajo en oro al
+            minuto 15. Una ventaja no asegura el final.
+          </p>
+        </div>
+        <p>
+          La muestra procede de historiales de jugadores de LAN. Puede compartir
+          jugadores y no representa todo el servidor.
+        </p>
+        <p class="note">
+          La prueba en vivo tuvo 12 aciertos en 27 partidas. No alcanza para concluir.
+          La consulta en vivo es opcional. Necesita una clave vigente
+          y una partida clasificatoria activa. La presentación usa ejemplos
+          guardados.
+        </p>
+      </section>
+    </main>
+    <footer>
+      <span id="location">¿Quién gana?</span>
+      <div>
+        <button id="previous" class="secondary">Vista anterior</button
+        ><button id="next">Siguiente vista</button>
+      </div>
+    </footer>
+    <p id="status" role="status"></p>
+  </body>
+</html>

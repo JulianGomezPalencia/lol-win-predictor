@@ -88,9 +88,9 @@ def extract_participants(match: dict) -> list[dict]:
 # --- The agent loop ------------------------------------------------------------
 
 
-def fetch_pending(conn) -> dict[str, int]:
-    """Process every pending match. Return counts, e.g. {"fetched": 900, "remake": 30, ...}."""
-    match_ids = db.get_match_ids_by_status(conn, "pending")
+def fetch_pending(conn, limit: int | None = None) -> dict[str, int]:
+    """Process pending matches (at most `limit`). Return counts, e.g. {"fetched": 900, "remake": 30, ...}."""
+    match_ids = db.get_match_ids_round_robin(conn, "pending", limit)  # a limit spreads over tiers
     counts: dict[str, int] = {}
     for i, match_id in enumerate(match_ids, start=1):
         try:
@@ -101,7 +101,7 @@ def fetch_pending(conn) -> dict[str, int]:
             match = None
         reason = "not found" if match is None else invalid_reason(match)
         if reason:
-            db.mark_match_invalid(conn, match_id)
+            db.mark_match_invalid(conn, match_id, reason)
             counts[reason] = counts.get(reason, 0) + 1
         else:
             db.save_fetched_match(conn, match_id, summarize(match), extract_participants(match))
