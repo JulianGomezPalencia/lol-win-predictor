@@ -28,7 +28,7 @@ Each agent can also run alone, e.g. `python -m src.agents.match_fetcher`. The de
 picks up the work that's still left, so if a run stops (Ctrl+C, crash, laptop asleep), run it again.
 `seed` and `discover` aren't in the default because re-running them grows the dataset instead of resuming it.
 
-Run **one agent at a time**: the rate limiter lives inside each process, so two running together
+Run one agent at a time: the rate limiter lives inside each process, so two running together
 would go over Riot's limit (100 requests / 2 minutes).
 
 | # | Agent | What it does | Writes to |
@@ -36,7 +36,7 @@ would go over Riot's limit (100 requests / 2 minutes).
 | 1 | `seeder` | Samples 40 players from every tier, Iron → Challenger | `players` |
 | 2 | `match_discovery` | Their ranked matches from the last 14 days → the job queue | `target_matches` (`pending`) |
 | 3 | `match_fetcher` | Downloads each match, drops remakes / wrong queue / missing lanes | `match_participants`, status `fetched` or `invalid` |
-| 4 | `history_builder` | Each player's last 10 ranked games **before** the match (no future leakage) | `player_history`, status `history_done` |
+| 4 | `history_builder` | Each player's last 10 ranked games before the match (no future leakage) | `player_history`, status `history_done` |
 | 5 | `player_snapshot` | Today's rank + champion mastery of each participant (NULL rank if unranked) | `player_snapshots`, `champion_mastery` |
 
 ## Training the model
@@ -46,65 +46,93 @@ would go over Riot's limit (100 requests / 2 minutes).
     python -m src.models.train         # baselines, logistic regression, random forest + metrics, also per rank band
     python -m src.models.predict --freeze         # historical, completed ONCE: keep the 22-variable model as the base, fit the 10-variable candidate
     python -m src.models.predict --evaluate-new   # historical, completed: frozen candidate vs base on matches collected after the freeze
-    python -m src.models.predict --train          # historical step, completed: refit on 2,973 matches
-    python -m src.models.predict --evaluate-final # FUTURE, after collection stops: test the shipped final model, never refit
+    python -m src.models.predict --train          # refit after both tests; keep a dated copy of the current bundle
+    python -m src.models.predict --evaluate-final # second test, completed; never refits
     python -m src.models.predict LA1_123456       # probability that blue won that (already played) match
     python -m src.models.predict --live "Name#TAG"   # a game in progress, before it ends
-    python -m src.models.predict --score-log      # logged live predictions vs the real results
+    python -m src.models.predict --watch --watch-minutes 60 --max-games 20  # watch local seeds, collection stopped
+    python -m src.models.predict --score-log      # results, log loss, coverage and Wilson intervals
 
-**Current state (2026-11-09):** the first forward test and the refit on 2,973 matches are complete.
-Candidate accuracy 56.5 %, AUC 0.577, log loss 0.6847; base 53.4 %, 0.549, 0.6917. The candidate won
-by the pre-registered paired log-loss criterion. Those results belong to the candidate fitted on 920,
-not to the shipped final model fitted on all 2,973.
+Estado (2026-11-11): la segunda prueba del modelo final pasó: 1.264 partidas,
+accuracy 57,04 % y AUC 0,5891. Se conserva la probabilidad sin recalibrar y las diez variables.
+Las cuatro familias ensayadas (premade, composición, por rol y no lineal) quedaron fuera. Tabla y resultados en [NOTES.md](NOTES.md#familias-nuevas-evaluadas-el-2026-11-11).
 
-**Next order:** collect NEW matches → stop collection → keep the 2026-11-09 export (`cp -R data/export data/export_2026-11-09`; the notebook reproduces the delivered numbers only from it) → `python -m scripts.export_dataset` →
-`python -m src.models.predict --evaluate-final`. **Do not run the test while collection is writing the DB.**
-No further retraining is planned. The historical `--train` guard remains: it requires a first-test
-result in `prueba_final.json` unless `--force` is given. `--freeze` was run once on 2026-11-05 and refuses
-another freeze. Do not rerun `--evaluate-new` to test the shipped model.
+Reajuste seguro. `--train` exige `prueba_final.json` y una ejecución en `segunda_prueba.json`
+con el `trained_at` del modelo actual. `--force` permite omitir las comprobaciones con aviso.
+Antes de sustituirlo, conserva `modelo_final_AAAA-MM-DD.joblib` (fecha de su ajuste) y verifica
+su SHA-256. Si esa copia existe con contenido distinto, se detiene sin sobrescribirla.
+El bundle nuevo conserva `modelo_probado` con las métricas y selectividad de la versión probada.
+El reajuste con más partidas no tiene prueba independiente propia. Los bundles anteriores
+sin ese campo siguen cargando. No repetir `--freeze` ni `--evaluate-new` para evaluar un reajuste.
 
-**Roles.** Riot assigns `teamPosition` after the game and the live endpoint (spectator-v5) gives no
+Confianza y abstención. Tanto las partidas jugadas como las predicciones en vivo muestran
+el favorito y confianza `max(p, 1-p)`: alta desde 65 %, media desde 60 % y baja desde 55 %.
+Por debajo de 55 % se muestra «Partida pareja: sin predicción». Ejemplo:
+`Predicción: gana el equipo azul. Confianza media (62,3 %).`
+Cuando está disponible, se añade el acierto histórico del umbral alcanzado en la segunda prueba,
+para un reajuste se identifica explícitamente como el de la versión probada del modelo.
+La confianza no equivale a una garantía de acierto de esa partida.
+
+Vigilancia. `--watch` recorre las semillas de SQLite en modo solo lectura, vuelve a recorrerlas
+cada 30 segundos y predice partidas de cola 420 con diez jugadores que no estén ya en el registro.
+Se detiene al alcanzar el tiempo (60 minutos por defecto), el máximo de partidas nuevas (20),
+o Ctrl+C y muestra revisados, predichas y omisiones por motivo. Los fallos de red y de predicción
+se cuentan por separado y permiten continuar. El plazo limita también las consultas, sus
+reintentos y esperas. El timeout de cada petición se reduce al tiempo restante.
+No ejecutar junto con la recolección: cada proceso tiene su propio limitador.
+La salida contiene campeones y posiciones inferidas, nunca nombres ni identificadores de jugador.
+
+En `--live` y `--watch`, `live_context.csv` guarda una fila por jugador con rango, LP, resultados
+previos, maestría y segundos transcurridos. No incluye identificadores personales ni el resultado
+de la partida actual y no modifica las variables del modelo. Los campos fallidos u ocultos quedan
+vacíos. Añade unas veinte consultas por partida. Las diez filas se publican juntas antes de
+registrar la predicción. Ambos modos reparan contextos ausentes o parciales de partidas todavía
+en curso, sin duplicar la predicción. El registro principal mantiene sus columnas.
+`--score-log` informa pérdida logarítmica, abstenciones y, para 55/60/65 %, n, cobertura y aciertos
+con IC de Wilson 95 %. Con menos de veinte partidas avisa de que la muestra es insuficiente.
+`--score-log` descarga las partidas terminadas que faltan en caché, por lo que cuenta como un proceso con red.
+
+Roles. Riot assigns `teamPosition` after the game and the live endpoint (spectator-v5) gives no
 position. So `src/features/roles.py` infers each team's roles from what is known before the match: the
 summoner spells (Smite = jungle) and the positions of the player's earlier games, solved as a
 one-to-one assignment. The model is trained on the same inferred roles, so training and prediction use
-one method (`build.build(inferred_positions=True)`, which needs `data/export/participant_spells.csv`;
+one method (`build.build(inferred_positions=True)`, which needs `data/export/participant_spells.csv`,
 `python -m scripts.export_dataset` writes it from the cached match JSON, with no API calls). The default
-`build.build()` still uses Riot's positions; the final notebook explicitly requests inferred positions.
+`build.build()` still uses Riot's positions. The final notebook explicitly requests inferred positions.
 
-The final model is a logistic regression on 10 frozen team-difference variables (`build.FINAL_FEATURES`; the
-three newest are mean recent kills, games in the last 24 hours and the champion-in-position pool win rate).
+The final model is a logistic regression on 10 frozen team-difference variables (`build.FINAL_FEATURES`). The
+three newest are mean recent kills, games in the last 24 hours and the champion-in-position pool win rate.
 The champion played also counts in role inference (a table made from the frozen pool). `--freeze`,
-`--evaluate-new`, `--evaluate-final` and `--train` need no Riot API key; the prediction commands do. A model saved before this
-change (22 variables, no pool; it is kept as `modelo_base_22.joblib`) is refused with a
+`--evaluate-new`, `--evaluate-final` and `--train` need no Riot API key. The prediction commands do. A model saved before this
+change (22 variables, no pool), kept as `modelo_base_22.joblib`, is refused with a
 message telling the user to run `--freeze` first and `--train` after the test. If the match was part of the training data the command prints a warning,
 because that probability is in-sample. The signal is weak (see NOTES.md).
 
-**`--live` limits.** The player must be in a ranked solo/duo game (queue 420) that has started loading;
+`--live` limits. The player must be in a ranked solo/duo game (queue 420) that has started loading,
 otherwise the command says so and stops. A hidden player or one blocked by Riot's firewall (`--` in the
 puuid) has no history but is still predicted. Reading the 10 histories takes about 1 to 3 minutes. Each
-game adds one row to `data/predictions/live_log.csv` (a game predicted twice is logged once);
+game adds one row to `data/predictions/live_log.csv` (a game predicted twice is logged once),
 `--score-log` later downloads the results of finished games and prints n, accuracy and, with at least 10
-games of both outcomes, the ROC AUC. **Do not run collection (`run_pipeline`) and `--live` at the same
-time**: each process has its own rate limiter, so together they go over Riot's limit.
+games of both outcomes, the ROC AUC. Do not run collection (`run_pipeline`) and `--live` at the same
+time: each process has its own rate limiter, so together they go over Riot's limit.
 
-**`--evaluate-new`** loads `modelo_base_22.joblib` and `modelo_candidato.joblib` WITHOUT refitting (it never reads
+`--evaluate-new` loads `modelo_base_22.joblib` and `modelo_candidato.joblib` WITHOUT refitting (it never reads
 `modelo_final.joblib`) and scores only matches that are not in the 1,206 development matches and were played after
 the last fitted one. It prints base, candidate, a 9-variable sensitivity model and a constant, the paired
 differences (log loss, AUC, accuracy) and a plain verdict: the candidate is better only if the 95 % interval of
-(base minus candidate) log loss is above 0. Each run is appended to `data/models/prueba_final.json`; with no
+(base minus candidate) log loss is above 0. Each run is appended to `data/models/prueba_final.json`. With no
 new matches it says so and writes nothing. Repeating it on the same data adds no evidence.
 
-**`--evaluate-final`** is the second, pre-registered test (NOTES.md, “Segunda prueba, fijada el 2026-11-09”).
+`--evaluate-final` is the second, pre-registered test (NOTES.md, “Segunda prueba, fijada el 2026-11-09”).
 It loads `modelo_final.joblib` and the candidate without fitting, using each bundle's own frozen pool
 and champion role table. It excludes final training and development IDs and requires start time
-strictly after both the bundle's last training match and **2026-11-05 18:00 UTC**. The final model wins
-only if the paired 95 % bootstrap interval of constant minus final log loss lies entirely above zero;
+strictly after both the bundle's last training match and 2026-11-05 18:00 UTC. The final model wins
+only if the paired 95 % bootstrap interval of constant minus final log loss lies entirely above zero,
 the constant is the final training blue-win rate. Candidate metrics are only a drift reference.
 Accuracy/AUC intervals, calibration, selective accuracy at confidence ≥ 0.55 / 0.60 / 0.65, dates, tier
 counts and exclusion counts are reported. Under 1,000 matches it warns about low power. Runs append
-only to `data/models/segunda_prueba.json`; zero test matches write nothing. Earlier run count is
-printed; repeats on the same or overlapping data add no independent evidence. This command has been
-implemented and tested synthetically; **the real second test has not been run**.
+only to `data/models/segunda_prueba.json`. Zero test matches write nothing. Earlier run count is
+printed. Repeats on the same or overlapping data add no independent evidence. Completamos este comando sobre 1.264 partidas. El resultado está en `data/models/segunda_prueba.json`. El reajuste posterior con 4.237 partidas sigue sin una prueba independiente propia.
 
 ## Collecting more data
 
@@ -123,22 +151,28 @@ The first independent test spans 2026-10-22 through 2026-11-05. Asking for more 
         # 4b. STOP collection first; database -> CSV files, including participant_spells.csv
     .venv/bin/python -m src.models.predict --evaluate-final
         # 5. only after collection stops and export completes: second test, no refit
-        # No further --train step is planned; do not repeat export while collection is running.
+        # Historical collection sequence; do not repeat export while collection is running.
 
 Measured cost (an estimate from the first collection): about 64 calls and 1.3 minutes per match, so 300
 matches take about 6.5 hours and 1,000 about 22 hours. Run it as the only process using the API key.
 
-`notebooks/modelo_final.ipynb` runs end to end locally or in Google Colab, with charts and the
-2026-11-09 post-hoc analysis. It refits from CSVs and asserts reproduction of the first test; it needs
-no joblib files and never runs either evaluation command or writes test results. Required inputs:
-`matches.csv`, `participants.csv`, `player_history.csv`, `participant_spells.csv` from the 2026-11-09
-export (2,973 valid matches), plus `conjunto_desarrollo.csv` (920 ajuste / 286 seleccion).
-Place them beside the notebook, or in Drive at `lol-win-predictor-data/completo`; locally it also finds
-`../data/export` and `../data/models/conjunto_desarrollo.csv`. `segunda_prueba.json` is optional and
-only displayed if present. Open in Jupyter and run all cells; Colab supplies the scientific libraries.
-**Colab clones `BRANCH = 'main'`; this branch must be merged into main before delivery.** The notebook
-uses 200 descriptive bootstrap resamples to target a runtime below roughly 10 minutes. The original
-analysis uses 500; this is post-hoc description, not a new model selection or a second test.
+## Notebook del informe
+
+Reejecutamos `notebooks/modelo_final.ipynb` con Python 3.14.3 y los CSV de
+`data/export_2026-11-09/`. Necesita `matches.csv`, `participants.csv`,
+`player_history.csv`, `participant_spells.csv` y
+`data/models/conjunto_desarrollo.csv` (920 de ajuste y 286 de selección).
+Reconstruye la primera prueba y muestra la segunda desde
+`data/models/segunda_prueba.json`. No guarda modelos ni modifica los registros
+de prueba. Usa 200 remuestras para el análisis descriptivo, frente a las 500 del
+análisis original.
+
+La sección de estado por minuto lee `predictibilidad.csv`, `remontadas.csv` y `objetivos.csv`
+de `data/analysis/`. La curva compara previo y estado en las mismas partidas
+de cada minuto y separa el punto previo de la segunda prueba completa.
+En Colab hay que proporcionar también estas tablas y el JSON de la segunda prueba.
+El notebook clona la rama `main` cuando el repositorio no está disponible.
+Para ver los cambios de esta entrega, esa rama debe contenerlos.
 
 ## Project layout
 
@@ -147,8 +181,8 @@ analysis uses 500; this is post-hoc description, not a new model selection or a 
 | `src/riot_client/` | The only code that talks to the Riot API: rate limiting, retries (up to 30 min of outage), match cache |
 | `src/storage/` | SQLite database: `schema.sql` (tables) and `db.py` (queries) |
 | `src/agents/` | The five data-collection agents |
-| `src/features/` | Pre-game variables per player and per match (blue minus red, lane against lane); `roles.py` infers positions before the game |
-| `src/models/` | Chronological split, baselines, models and metrics (`train.py`); final model and prediction (`predict.py`) |
+| `src/features/` | Pre-game variables per player and per match (blue minus red, lane against lane), `roles.py` infers positions before the game |
+| `src/models/` | Chronological split, baselines, models and metrics (`train.py`). Final model and prediction (`predict.py`) |
 | `scripts/` | Runnable scripts: `run_pipeline.py`, `export_dataset.py`, `hello_riot.py` |
 | `tests/` | Automated tests (no real API calls) |
 | `data/` | Downloaded matches and the database (not in git) |
@@ -164,15 +198,96 @@ analysis uses 500; this is post-hoc description, not a new model selection or a 
 - [x] Model training (first version: weak signal, see NOTES.md)
 - [x] Sensitivity check on the position variables (see NOTES.md)
 - [x] Final model + `predict` command for played matches, per-tier check (see NOTES.md)
-- [x] Role inference from spells + champion + history; live prediction (`--live`), live log, `--score-log`
+- [x] Role inference from spells + champion + history. Live prediction (`--live`), live log, `--score-log`
 - [x] Frozen 10-variable candidate (`--freeze`, 2026-11-05) and the forward test (`--evaluate-new`)
 - [x] First forward test on 1,767 new matches and final refit on all 2,973
-- [x] Second-test command, preregistration and synthetic tests; final notebook and 2026-11-09 analysis
-- [ ] Complete new collection, stop, export and run the second test with `--evaluate-final`
+- [x] Second-test command, preregistration and synthetic tests. Final notebook and 2026-11-09 analysis
+- [x] Complete new collection, stop, export and run the second test with `--evaluate-final`
+- [x] Confidence and abstention, safe refit, watch, anonymous live context and selective log scoring
 - [ ] Merge this branch into main before delivering the Colab notebook
-- [ ] Forward test: run `--live` on real games, then `--score-log`
+- [x] Completamos una hora de vigilancia en vivo y puntuamos el registro al corte del 16 de noviembre de 2026 a las 20:22, hora local de Colombia.
 
 ---
 This project isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone
 officially involved in producing or managing Riot Games properties. Riot Games and all associated properties
 are trademarks or registered trademarks of Riot Games, Inc.
+
+## Descarga de líneas de tiempo
+
+Guardamos las respuestas completas en `data/raw/timelines/`. El descargador lee
+las partidas de la base local y omite las líneas de tiempo que ya están en caché.
+Necesita las credenciales de Riot en `.env`.
+
+```bash
+.venv/bin/python scripts/download_timelines.py --max 2800 --minutes 75
+```
+
+`--max` limita las descargas nuevas exitosas. `--minutes` limita el tiempo de la
+corrida, incluidas consultas y esperas. Una operación local o respuesta ya iniciada
+puede terminar después. Podemos repetir el comando para continuar con lo pendiente.
+Lo ejecutamos como único proceso que consulta Riot. Antes hay que detener la
+recolección y la vigilancia. No se debe usar la consulta en vivo mientras descarga.
+Descargamos 2.820 líneas de tiempo.
+
+## Modelos por minuto
+
+Entrenamos el estado con las líneas de tiempo locales, separando por fecha de inicio
+con zona horaria y el corte del 2026-11-09T18:09:41+00:00. La ayuda se puede consultar sin descargar ni entrenar.
+
+```bash
+.venv/bin/python -m src.models.ingame --help
+.venv/bin/python -m src.models.ingame --train --before 2026-11-09T18:09:41+00:00
+```
+
+Para una evaluación separada existe el siguiente comando. La evaluación confirmatoria
+ya está completada y no debe repetirse sobre las mismas partidas.
+
+```bash
+.venv/bin/python -m src.models.ingame --evaluate --after 2026-11-09T18:09:41+00:00
+```
+
+Estos comandos leen datos locales y no descargan partidas. Los modelos de estado
+no cambian las diez variables ni la receta del modelo previo.
+
+## Interfaz local
+
+Añadimos cuatro pestañas para consultar una partida en vivo, repetir una partida,
+probar diferencias de juego y leer los resultados. La abrimos desde la raíz.
+
+```bash
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m src.app
+```
+
+La página se abre en `http://127.0.0.1:8501`. La interfaz cargó sus cuatro pestañas y la batería completa terminó con 325 pruebas aprobadas. La consulta
+en vivo tarda varios minutos y usa credenciales de Riot. El dato escrito para buscar
+al jugador no se guarda. Esperamos a que termine cualquier descarga antes de consultar.
+
+## Modo de demostración
+
+Abrimos la misma interfaz y elegimos Repetición para recorrer los ejemplos de
+`data/app/ejemplos.json`. No hay un comando ni un interruptor de demo aparte.
+Los ejemplos guardados funcionan sin credenciales ni partida activa. En Qué aprendimos
+podemos leer las tablas y figuras locales. La calculadora necesita los modelos guardados,
+deja en cero las variables sin control visible y usa el modelo del minuto 30 para los
+minutos posteriores. Si falta un archivo, la pantalla informa de su ausencia.
+
+Para generar ejemplos con `scripts/build_demo_examples.py` hay que proporcionar
+un CSV de candidatas con `match_id`, `categoria` y `prob_previa`. El script elige con semilla 42 cuatro aciertos con confianza, dos
+fallos con confianza, tres remontadas y tres partidas al azar, sin repetir partidas.
+Las categorías se calculan en la corrida de análisis. `scripts/build_demo_examples.py`
+necesita que se le proporcione ese CSV mediante `--candidates RUTA_AL_CSV`, además de
+las partidas y líneas de tiempo en caché y `data/models/modelos_en_partida.joblib`.
+No genera el CSV de candidatas.
+
+La demo, la calculadora y Qué aprendimos necesitan archivos locales bajo `data/`,
+que está ignorado por git. Un clon nuevo debe ejecutar primero los comandos de
+recolección, exportación, descarga y entrenamiento indicados arriba. Las tablas,
+figuras y ejemplos se produjeron con
+`.venv/bin/python scripts/analisis/minuto.py --final` y los
+objetivos con `.venv/bin/python scripts/analisis/objetivos.py`.
+El análisis confirmatorio se ejecuta una sola vez y tiene una guardia contra repeticiones.
+También se necesita el catálogo local `data/static/champion_16.22.1.json` para los
+nombres de campeones. Estos archivos privados y los scripts de la corrida de análisis
+no se distribuyen con el clon, por lo que los comandos del repositorio por sí solos
+no preparan toda la demo. Para reproducirla hay que disponer de esos insumos locales.
