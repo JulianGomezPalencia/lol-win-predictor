@@ -73,7 +73,18 @@ def test_all_distributed_files_are_small_and_scan_clean():
     assert sum(p.stat().st_size for p in DEMO.rglob('*') if p.is_file()) <= 15_000_000
     assert 'match_ids' not in joblib.load(DEMO / 'modelos_en_partida.joblib')
     for row in json.loads((DEMO / 'ejemplos.json').read_text()):
-        assert set(row) == {'etiqueta', 'gana_azul', 'prob_previa', 'campeones', 'curva', 'eventos'}
+        assert set(row) == {'etiqueta', 'gana_azul', 'prob_previa', 'campeones', 'historial', 'curva', 'eventos'}
+        for team in ('azul', 'rojo'):
+            assert set(row['historial'][team]) == {'winrate_10', 'kda_medio', 'partidas_con_campeon'}
+            assert all(isinstance(v, (int, float)) and np.isfinite(v) for v in row['historial'][team].values())
+            assert 0 <= row['historial'][team]['winrate_10'] <= 1
+
+
+def test_distributed_examples_include_inhibitor_and_comeback(clean_clone):
+    examples = logic.load_examples()
+    assert any(e['tipo'] == 'inhibidor' for row in examples for e in row['eventos'])
+    assert any((p['prob_azul'] >= .5) != row['gana_azul']
+               for row in examples for p in row['curva'] if p['minuto'] == 15)
 
 
 @pytest.mark.parametrize('secret', ['Z' * 80, 'A+/' * 30, 'LA1_123456789', 'Jugador#Etiqueta', '玩家#LAN', 'Jugador Uno#LAN'])
@@ -133,13 +144,12 @@ def test_build_sanitizes_exports_and_preserves_predictions(tmp_path):
         build_demo.build(data, output)
 
 
-def test_screen_works_without_data_or_credentials(clean_clone):
-    from streamlit.testing.v1 import AppTest
-    app = AppTest.from_file(str(Path(logic.__file__).with_name('screen.py'))).run(timeout=20)
-    assert not app.exception
-    assert len(app.tabs) == 4
-    assert len(app.number_input) == 10
-    assert len(app.metric) == 2
+def test_web_works_without_data_or_credentials(clean_clone):
+    from src.app.server import create_app
+    client = create_app().test_client()
+    assert client.get('/').status_code == 200
+    assert len(client.get('/api/examples').json) == 12
+    assert len(client.get('/api/calculator').json['variables']) == 10
 
 
 def test_consistency_default_output_is_in_analysis(tmp_path, monkeypatch):

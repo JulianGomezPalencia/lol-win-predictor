@@ -17,6 +17,7 @@ import joblib
 import pandas as pd
 from src.app.logic import public_example, champion_names
 from src.features.build import FINAL_FEATURES
+from scripts.build_demo_examples import enrich_examples
 
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC_CATALOG_SHA256 = 'ab0bebb32fdc048a35ed6182d127ae43adcc4734b6360a84ee0b6f508773e0cf'
@@ -129,7 +130,7 @@ def scan_demo(directory, data=None):
                     if example.get('etiqueta') == f'Partida {index}':
                         values.remove(example['etiqueta'])
                     for event in example.get('eventos', []):
-                        for field, allowed in [('tipo', {'dragón', 'torre', 'barón'}),
+                        for field, allowed in [('tipo', {'dragón', 'torre', 'barón', 'inhibidor'}),
                                                ('equipo', {'azul', 'rojo'})]:
                             if event.get(field) in allowed:
                                 values.remove(event[field])
@@ -179,6 +180,8 @@ def build(data, output):
     ingame = {key: ingame[key] for key in ('version', 'features', 'models', 'counts', 'unavailable_minutes', 'trained_at', 'recipe')}
     joblib.dump(ingame, output / 'modelos_en_partida.joblib')
     raw = json.loads((data / 'app/ejemplos.json').read_text())
+    if (data / 'export/player_history.csv').is_file():
+        raw = enrich_examples(raw, data)
     names = champion_names(data / "static/champion_16.22.1.json").values()
     examples = [public_example(example, index, names) for index, example in enumerate(raw, 1)]
     (output / 'ejemplos.json').write_text(json.dumps(examples, ensure_ascii=False, indent=2) + '\n')
@@ -200,7 +203,7 @@ El comando lee los productos locales de `data/` y no consulta Riot.
 
 - `modelo_previo.joblib` contiene el pipeline y las diez variables de `data/models/modelo_final.joblib`. Omitimos las tablas por jugador y los identificadores.
 - `modelos_en_partida.joblib` conserva los modelos de `data/models/modelos_en_partida.joblib`, sin la lista de partidas de entrenamiento.
-- `ejemplos.json` procede de `data/app/ejemplos.json`. Publicamos solo campos de pantalla y numeramos las partidas.
+- `ejemplos.json` conserva las doce partidas de `data/app/ejemplos.json`, sus predicciones y sus curvas. Recuperamos los eventos, incluidos los inhibidores, de las líneas de tiempo locales. Las tres medias por equipo (victorias recientes, KDA y partidas con el campeón) se calculan con `src.features.build.player_features` desde `data/export/`, usando solo historial anterior a cada partida. Omitimos identidades y valores individuales y numeramos las partidas. Hay ejemplos de remontada y de destrucción de inhibidor.
 - `analysis/` contiene las cinco tablas de `data/analysis/`, sin la columna de procedencia.
 - `figuras/` copia las figuras 3 a 5 de `data/analysis/figuras/`.
 - `champion_16.22.1.json` copia los nombres públicos de campeones de `data/static/`.

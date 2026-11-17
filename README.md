@@ -251,18 +251,16 @@ no cambian las diez variables ni la receta del modelo previo.
 
 ## Interfaz local
 
-Añadimos cuatro pestañas para consultar una partida en vivo, repetir una partida,
-probar diferencias de juego y leer los resultados. La abrimos desde la raíz.
+La página reúne votación, acierto por minuto, repetición, objetivos, calculadora, consulta en vivo y conclusiones. Se ejecuta desde la raíz.
 
 ```bash
 .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python -m src.app
 ```
 
-La página se abre en `http://127.0.0.1:8501`. En la comprobación del 16 de noviembre la interfaz cargó sus cuatro pestañas y
-la batería completa terminó con 325 pruebas aprobadas. La consulta
-en vivo tarda varios minutos y usa credenciales de Riot. El dato escrito para buscar
-al jugador no se guarda. Esperamos a que termine cualquier descarga antes de consultar.
+Abre `http://127.0.0.1:8000`. La demo funciona sin internet, sin `data/` y sin clave.
+Pulsa **P** o **Presentar** para proyectar. Las flechas recorren las vistas y en Repetición avanzan el reloj, con pausa en el minuto 15. **Siguiente vista** continúa el recorrido. **R** carga una remontada sin anunciarla al público. **Esc** sale de pantalla completa. La predicción y el ganador se revelan con botones separados.
+La consulta en vivo necesita una clave en `.env`, tarda varios minutos y no guarda el nombre consultado.
 
 ## Modo de demostración
 

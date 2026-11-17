@@ -5,7 +5,7 @@ El comando lee los productos locales de `data/` y no consulta Riot.
 
 - `modelo_previo.joblib` contiene el pipeline y las diez variables de `data/models/modelo_final.joblib`. Omitimos las tablas por jugador y los identificadores.
 - `modelos_en_partida.joblib` conserva los modelos de `data/models/modelos_en_partida.joblib`, sin la lista de partidas de entrenamiento.
-- `ejemplos.json` procede de `data/app/ejemplos.json`. Publicamos solo campos de pantalla y numeramos las partidas.
+- `ejemplos.json` conserva las doce partidas de `data/app/ejemplos.json`, sus predicciones y sus curvas. Recuperamos los eventos, incluidos los inhibidores, de las líneas de tiempo locales. Las tres medias por equipo (victorias recientes, KDA y partidas con el campeón) se calculan con `src.features.build.player_features` desde `data/export/`, usando solo historial anterior a cada partida. Omitimos identidades y valores individuales y numeramos las partidas. Hay ejemplos de remontada y de destrucción de inhibidor.
 - `analysis/` contiene las cinco tablas de `data/analysis/`, sin la columna de procedencia.
 - `figuras/` copia las figuras 3 a 5 de `data/analysis/figuras/`.
 - `champion_16.22.1.json` copia los nombres públicos de campeones de `data/static/`.

@@ -5,6 +5,7 @@ son acierto_con_confianza, fallo_con_confianza, remontada y azar. La corrida de
 análisis las determina con predicciones fuera de muestra antes de llamar aquí.
 """
 import argparse
+import gzip
 import json
 from pathlib import Path
 import random
@@ -12,11 +13,38 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pandas as pd
-from src.app.logic import example_from_match
+from src.app.logic import example_from_match, replay_events
+from src.features.build import player_features
 from src.models import ingame
 from src.riot_client import cache
 
 QUOTAS = {"acierto_con_confianza": 4, "fallo_con_confianza": 2, "remontada": 3, "azar": 3}
+
+
+def enrich_examples(examples, data):
+    """Recupera eventos y medias previas de los ejemplos sin escribir en data."""
+    data = Path(data)
+    ids = {e['match_id_interno'] for e in examples}
+    export = data / 'export'
+    matches = pd.read_csv(export / 'matches.csv', dtype={'patch': str})
+    matches = matches[matches.match_id.isin(ids)]
+    participants = pd.read_csv(export / 'participants.csv')
+    participants = participants[participants.match_id.isin(ids)]
+    history = pd.read_csv(export / 'player_history.csv')
+    history = history[history.target_match_id.isin(ids)]
+    players = player_features(history, participants, matches)
+    fields = ['winrate_10', 'kda_medio', 'partidas_con_campeon']
+    means = players.groupby(['match_id', 'team_id'])[fields].mean()
+    result = []
+    for example in examples:
+        key = example['match_id_interno']
+        with gzip.open(data / 'raw/timelines' / f'{key}.json.gz', 'rt', encoding='utf-8') as stream:
+            events = replay_events(json.load(stream))
+        summary = {label: {field: None if pd.isna(value) else float(value)
+                           for field, value in means.loc[(key, team)].items()}
+                   for team, label in [(100, 'azul'), (200, 'rojo')]}
+        result.append({**example, 'historial': summary, 'eventos': events})
+    return result
 
 
 def select_examples(candidates, seed=42):
@@ -52,8 +80,11 @@ def main(argv=None):
     parser.add_argument("--model", default=ingame.MODEL_PATH, type=Path)
     parser.add_argument("--output", default=ingame.ROOT / "data/app/ejemplos.json", type=Path)
     parser.add_argument("--seed", default=42, type=int)
+    parser.add_argument("--data", type=Path, help="Añade medias por equipo desde los productos locales.")
     args = parser.parse_args(argv)
     examples = build(pd.read_csv(args.candidates).to_dict("records"), ingame.load_bundle(args.model), args.seed)
+    if args.data is not None:
+        examples = enrich_examples(examples, args.data)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(examples, ensure_ascii=False))
     print(f"Guardamos {len(examples)} ejemplos sin datos de jugadores.")

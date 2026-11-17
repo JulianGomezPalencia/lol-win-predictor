@@ -2,6 +2,18 @@
   {
     "etiqueta": "Partida 1",
     "gana_azul": false,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.5088888888888888,
+        "kda_medio": 2.6350556357223023,
+        "partidas_con_campeon": 2.2
+      },
+      "rojo": {
+        "winrate_10": 0.4673611111111111,
+        "kda_medio": 3.6721279877529875,
+        "partidas_con_campeon": 3.25
+      }
+    },
     "prob_previa": 0.364584561074755,
     "campeones": {
       "azul": [
@@ -187,6 +199,11 @@
         "equipo": "rojo"
       },
       {
+        "minuto": 20.353833333333334,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
         "minuto": 20.487216666666665,
         "tipo": "torre",
         "equipo": "azul"
@@ -217,6 +234,16 @@
         "equipo": "azul"
       },
       {
+        "minuto": 27.801783333333333,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 28.833683333333333,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
         "minuto": 28.931166666666666,
         "tipo": "torre",
         "equipo": "rojo"
@@ -231,6 +258,18 @@
   {
     "etiqueta": "Partida 2",
     "gana_azul": true,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.5611111111111111,
+        "kda_medio": 3.977933501683502,
+        "partidas_con_campeon": 4.5
+      },
+      "rojo": {
+        "winrate_10": 0.42000000000000004,
+        "kda_medio": 2.537125701459035,
+        "partidas_con_campeon": 1.8
+      }
+    },
     "prob_previa": 0.6810929072759895,
     "campeones": {
       "azul": [
@@ -381,6 +420,11 @@
         "equipo": "azul"
       },
       {
+        "minuto": 17.675383333333333,
+        "tipo": "inhibidor",
+        "equipo": "azul"
+      },
+      {
         "minuto": 19.065716666666667,
         "tipo": "torre",
         "equipo": "azul"
@@ -388,6 +432,11 @@
       {
         "minuto": 19.234416666666668,
         "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.584966666666666,
+        "tipo": "inhibidor",
         "equipo": "azul"
       },
       {
@@ -405,6 +454,18 @@
   {
     "etiqueta": "Partida 3",
     "gana_azul": false,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.49333333333333335,
+        "kda_medio": 2.8131911206077875,
+        "partidas_con_campeon": 1.6
+      },
+      "rojo": {
+        "winrate_10": 0.48666666666666664,
+        "kda_medio": 3.556150553150553,
+        "partidas_con_campeon": 2.2
+      }
+    },
     "prob_previa": 0.38995683976797163,
     "campeones": {
       "azul": [
@@ -615,6 +676,11 @@
         "equipo": "rojo"
       },
       {
+        "minuto": 24.363766666666667,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
         "minuto": 27.45645,
         "tipo": "barón",
         "equipo": "rojo"
@@ -634,6 +700,18 @@
   {
     "etiqueta": "Partida 4",
     "gana_azul": true,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.47111111111111115,
+        "kda_medio": 3.1310116550116547,
+        "partidas_con_campeon": 5.8
+      },
+      "rojo": {
+        "winrate_10": 0.5155555555555555,
+        "kda_medio": 3.4764882897603484,
+        "partidas_con_campeon": 0.8
+      }
+    },
     "prob_previa": 0.625224604169825,
     "campeones": {
       "azul": [
@@ -864,6 +942,11 @@
         "equipo": "azul"
       },
       {
+        "minuto": 29.555416666666666,
+        "tipo": "inhibidor",
+        "equipo": "azul"
+      },
+      {
         "minuto": 30.079533333333334,
         "tipo": "dragón",
         "equipo": "azul"
@@ -883,6 +966,18 @@
   {
     "etiqueta": "Partida 5",
     "gana_azul": false,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.4666666666666666,
+        "kda_medio": 3.015395024079235,
+        "partidas_con_campeon": 1.4
+      },
+      "rojo": {
+        "winrate_10": 0.5288888888888889,
+        "kda_medio": 2.205383527453703,
+        "partidas_con_campeon": 1.2
+      }
+    },
     "prob_previa": 0.662538708498387,
     "campeones": {
       "azul": [
@@ -1118,8 +1213,23 @@
         "equipo": "rojo"
       },
       {
+        "minuto": 34.63525,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.948366666666665,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
         "minuto": 35.01861666666667,
         "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 35.203466666666664,
+        "tipo": "inhibidor",
         "equipo": "rojo"
       },
       {
@@ -1142,6 +1252,18 @@
   {
     "etiqueta": "Partida 6",
     "gana_azul": true,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.6044444444444445,
+        "kda_medio": 3.8257071077071076,
+        "partidas_con_campeon": 0.4
+      },
+      "rojo": {
+        "winrate_10": 0.5599999999999999,
+        "kda_medio": 4.477445887445887,
+        "partidas_con_campeon": 1.2
+      }
+    },
     "prob_previa": 0.36128264775452495,
     "campeones": {
       "azul": [
@@ -1392,6 +1514,16 @@
         "equipo": "rojo"
       },
       {
+        "minuto": 34.02818333333333,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.120583333333336,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
         "minuto": 34.2564,
         "tipo": "torre",
         "equipo": "rojo"
@@ -1404,6 +1536,11 @@
       {
         "minuto": 37.14001666666667,
         "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 37.22461666666667,
+        "tipo": "inhibidor",
         "equipo": "azul"
       },
       {
@@ -1421,6 +1558,18 @@
   {
     "etiqueta": "Partida 7",
     "gana_azul": false,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.40888888888888886,
+        "kda_medio": 2.338210070974777,
+        "partidas_con_campeon": 4.2
+      },
+      "rojo": {
+        "winrate_10": 0.4066666666666666,
+        "kda_medio": 2.623212176712177,
+        "partidas_con_campeon": 1.0
+      }
+    },
     "prob_previa": 0.6153420841507163,
     "campeones": {
       "azul": [
@@ -1641,8 +1790,18 @@
         "equipo": "rojo"
       },
       {
+        "minuto": 30.178766666666668,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
         "minuto": 30.388683333333333,
         "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 30.50733333333333,
+        "tipo": "inhibidor",
         "equipo": "rojo"
       },
       {
@@ -1670,6 +1829,18 @@
   {
     "etiqueta": "Partida 8",
     "gana_azul": false,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.6,
+        "kda_medio": 3.0245473785473784,
+        "partidas_con_campeon": 4.8
+      },
+      "rojo": {
+        "winrate_10": 0.47111111111111115,
+        "kda_medio": 3.9054785954785958,
+        "partidas_con_campeon": 3.8
+      }
+    },
     "prob_previa": 0.48281052319719886,
     "campeones": {
       "azul": [
@@ -1905,6 +2076,11 @@
         "equipo": "rojo"
       },
       {
+        "minuto": 31.2084,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
         "minuto": 31.564266666666665,
         "tipo": "torre",
         "equipo": "rojo"
@@ -1919,6 +2095,18 @@
   {
     "etiqueta": "Partida 9",
     "gana_azul": false,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.3688888888888889,
+        "kda_medio": 1.8354075353658685,
+        "partidas_con_campeon": 4.4
+      },
+      "rojo": {
+        "winrate_10": 0.36888888888888893,
+        "kda_medio": 1.7613183729850395,
+        "partidas_con_campeon": 2.8
+      }
+    },
     "prob_previa": 0.4433557501552528,
     "campeones": {
       "azul": [
@@ -2104,6 +2292,11 @@
         "equipo": "azul"
       },
       {
+        "minuto": 19.748083333333334,
+        "tipo": "inhibidor",
+        "equipo": "azul"
+      },
+      {
         "minuto": 21.016283333333334,
         "tipo": "torre",
         "equipo": "rojo"
@@ -2149,6 +2342,11 @@
         "equipo": "azul"
       },
       {
+        "minuto": 29.687833333333334,
+        "tipo": "inhibidor",
+        "equipo": "azul"
+      },
+      {
         "minuto": 29.867233333333335,
         "tipo": "torre",
         "equipo": "azul"
@@ -2156,6 +2354,11 @@
       {
         "minuto": 29.90185,
         "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 30.067233333333334,
+        "tipo": "inhibidor",
         "equipo": "rojo"
       },
       {
@@ -2184,6 +2387,16 @@
         "equipo": "rojo"
       },
       {
+        "minuto": 34.8599,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.891616666666664,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
         "minuto": 34.99968333333333,
         "tipo": "torre",
         "equipo": "rojo"
@@ -2193,6 +2406,18 @@
   {
     "etiqueta": "Partida 10",
     "gana_azul": false,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.5555555555555556,
+        "kda_medio": 3.02365873015873,
+        "partidas_con_campeon": 2.2
+      },
+      "rojo": {
+        "winrate_10": 0.5288888888888889,
+        "kda_medio": 3.9090709475709473,
+        "partidas_con_campeon": 5.2
+      }
+    },
     "prob_previa": 0.34111181708224825,
     "campeones": {
       "azul": [
@@ -2427,6 +2652,18 @@
   {
     "etiqueta": "Partida 11",
     "gana_azul": false,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.44571428571428573,
+        "kda_medio": 3.589624486624486,
+        "partidas_con_campeon": 2.2
+      },
+      "rojo": {
+        "winrate_10": 0.419047619047619,
+        "kda_medio": 3.503942257037495,
+        "partidas_con_campeon": 3.2
+      }
+    },
     "prob_previa": 0.6155170943434884,
     "campeones": {
       "azul": [
@@ -2667,6 +2904,11 @@
         "equipo": "rojo"
       },
       {
+        "minuto": 42.48233333333334,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
         "minuto": 42.574866666666665,
         "tipo": "barón",
         "equipo": "azul"
@@ -2691,6 +2933,18 @@
   {
     "etiqueta": "Partida 12",
     "gana_azul": false,
+    "historial": {
+      "azul": {
+        "winrate_10": 0.5444444444444445,
+        "kda_medio": 3.7407009780343117,
+        "partidas_con_campeon": 3.4
+      },
+      "rojo": {
+        "winrate_10": 0.5838888888888889,
+        "kda_medio": 4.425651695526695,
+        "partidas_con_campeon": 2.8
+      }
+    },
     "prob_previa": 0.4783443443376318,
     "campeones": {
       "azul": [
@@ -2882,6 +3136,11 @@
         "equipo": "rojo"
       },
       {
+        "minuto": 24.3461,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
         "minuto": 25.490983333333332,
         "tipo": "dragón",
         "equipo": "rojo"
@@ -2899,6 +3158,16 @@
       {
         "minuto": 27.034366666666667,
         "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.1552,
+        "tipo": "inhibidor",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.469833333333334,
+        "tipo": "inhibidor",
         "equipo": "rojo"
       },
       {

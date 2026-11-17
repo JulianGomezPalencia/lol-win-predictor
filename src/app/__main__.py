@@ -1,8 +1,6 @@
-"""Arranca Streamlit solo en la máquina local."""
-from pathlib import Path
-import sys
-from streamlit.web import cli
+"""Arranca la página web en la máquina local."""
+from src.app.server import create_app
 
 if __name__ == "__main__":
-    sys.argv = ["streamlit", "run", str(Path(__file__).with_name("screen.py")), "--server.address=127.0.0.1", "--browser.gatherUsageStats=false"]
-    cli.main()
+    print("Interfaz disponible en http://127.0.0.1:8000", flush=True)
+    create_app().run(host="127.0.0.1", port=8000, debug=False)

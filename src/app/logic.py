@@ -1,5 +1,6 @@
 """Operaciones de pantalla con salidas limitadas a datos sin jugadores."""
 import json
+import math
 import re
 from pathlib import Path
 
@@ -47,12 +48,20 @@ def public_example(example, index=1, names=None):
     """Lista blanca. Etiquetas y nombres se reconstruyen, nunca se copian del JSON."""
     names = set(champion_names().values()) if names is None else set(names)
     champions = example.get("campeones", {})
+    def number(value):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return None
+        return float(value) if math.isfinite(value) else None
+
     return {"etiqueta": f"Partida {index}", "gana_azul": bool(example["gana_azul"]),
+            "historial": {team: {field: number(example.get('historial', {}).get(team, {}).get(field))
+                                  for field in ('winrate_10', 'kda_medio', 'partidas_con_campeon')}
+                          for team in ('azul', 'rojo')},
             "prob_previa": None if example.get("prob_previa") is None else float(example["prob_previa"]),
             "campeones": {team: [c if c in names else "Campeón" for c in champions.get(team, [])] for team in ("azul", "rojo")},
             "curva": [{"minuto": int(p["minuto"]), "prob_azul": float(p["prob_azul"])} for p in example["curva"]],
             "eventos": [{"minuto": float(e["minuto"]), "tipo": e["tipo"], "equipo": e["equipo"]}
-                        for e in example.get("eventos", []) if e.get("tipo") in ("dragón", "torre", "barón") and e.get("equipo") in ("azul", "rojo")]}
+                        for e in example.get("eventos", []) if e.get("tipo") in ("dragón", "torre", "barón", "inhibidor") and e.get("equipo") in ("azul", "rojo")]}
 
 
 def load_examples(path=None):
@@ -61,6 +70,11 @@ def load_examples(path=None):
         raw = json.loads(Path(path).read_text())
         if not isinstance(raw, list):
             return []
+        # Los productos locales antiguos carecen de las medias públicas.
+        if (path == ROOT / 'data/app/ejemplos.json' and any('historial' not in e for e in raw)
+                and (ROOT / 'demo/ejemplos.json').is_file()):
+            path = ROOT / 'demo/ejemplos.json'
+            raw = json.loads(path.read_text())
         return [public_example(e, i) for i, e in enumerate(raw, 1)]
     except (OSError, ValueError, KeyError, TypeError):
         return []
@@ -79,6 +93,8 @@ def replay_events(timeline):
             kind, team = None, None
             if e["type"] == "BUILDING_KILL" and e.get("buildingType") == "TOWER_BUILDING":
                 kind, team = "torre", 300 - e["teamId"]
+            elif e["type"] == "BUILDING_KILL" and e.get("buildingType") == "INHIBITOR_BUILDING":
+                kind, team = "inhibidor", 300 - e["teamId"]
             elif e["type"] == "ELITE_MONSTER_KILL":
                 kind, team = {"DRAGON": "dragón", "BARON_NASHOR": "barón"}.get(e.get("monsterType")), e.get("killerTeamId")
             if kind and team in (100, 200):

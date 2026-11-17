@@ -16,3 +16,6 @@ data/
 .idea/
 .ipynb_checkpoints/
 
+
+# Local design workspace
+.impeccable/

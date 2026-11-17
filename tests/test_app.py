@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -99,20 +98,6 @@ def test_demo_selection_reproducible_and_unique():
         demo.select_examples([])
 
 
-def test_screen_missing_files_without_credentials(tmp_path, monkeypatch):
-    from streamlit.testing.v1 import AppTest
-    monkeypatch.delenv("RIOT_API_KEY", raising=False)
-    monkeypatch.setattr(logic, "load_examples", lambda: [])
-    monkeypatch.setattr(logic, "findings_paths", lambda: {"tablas": [], "figuras": []})
-    def missing():
-        raise FileNotFoundError()
-    monkeypatch.setattr(ingame, "load_bundle", missing)
-    app = AppTest.from_file(str(Path(logic.__file__).with_name("screen.py"))).run()
-    assert not app.exception
-    assert [t.label for t in app.tabs] == ["Partida en vivo", "Repetición", "Calculadora", "Qué aprendimos"]
-    assert len(app.info) >= 3
-
-
 def test_live_game_no_log_mode_returns_factors_without_writes(monkeypatch, tmp_path):
     from src.agents import history_builder
     from src.riot_client import endpoints
@@ -135,23 +120,6 @@ def test_live_game_no_log_mode_returns_factors_without_writes(monkeypatch, tmp_p
     assert list(tmp_path.iterdir()) == []
 
 
-def test_screen_saved_example_renders_curve(tmp_path, monkeypatch):
-    from streamlit.testing.v1 import AppTest
-    example = {"etiqueta": "Partida 1", "gana_azul": False, "prob_previa": .6,
-               "campeones": {"azul": ["Annie"], "rojo": ["Jax"]},
-               "curva": [{"minuto": 0, "prob_azul": .6}, {"minuto": 1, "prob_azul": .4}],
-               "eventos": [{"minuto": 1, "tipo": "dragón", "equipo": "rojo"}]}
-    monkeypatch.setattr(logic, "load_examples", lambda: [example])
-    monkeypatch.setattr(logic, "findings_paths", lambda: {"tablas": [], "figuras": []})
-    def missing():
-        raise FileNotFoundError()
-    monkeypatch.setattr(ingame, "load_bundle", missing)
-    app = AppTest.from_file(str(Path(logic.__file__).with_name("screen.py"))).run()
-    assert not app.exception
-    assert any("Ganó el equipo rojo" in m.value for m in app.markdown)
-    assert len(app.dataframe) == 1
-
-
 def test_findings_table_hides_identifiers(tmp_path):
     path = tmp_path / "table.csv"
     path.write_text("puuid,riot_id,match_id,n,categoria\nprivate,Name#TAG,SYN_1,10,dragón\n")
@@ -168,3 +136,34 @@ def test_demo_build_only_reads_cache(monkeypatch):
     output = demo.build(candidates, {})
     assert len(output) == 12
     assert output[0] == {"etiqueta": "Partida 1", "prob_previa": .6}
+
+
+def test_demo_team_history_uses_only_earlier_non_remake_games(tmp_path):
+    import gzip
+    import pandas as pd
+    export = tmp_path / 'export'
+    export.mkdir()
+    pd.DataFrame([{'match_id': 'SYN_1', 'status': 'history_done',
+                   'game_start_ts': 1000000, 'patch': '16.22'}]).to_csv(export / 'matches.csv', index=False)
+    participants, histories = [], []
+    for player in range(10):
+        participants.append({'match_id': 'SYN_1', 'player_id': player, 'team_id': 100 if player < 5 else 200,
+                             'team_position': 'TOP', 'champion_id': 1})
+        for rank, timestamp, remake in [(1, 900000, 0), (2, 1100000, 0), (3, 800000, 1)]:
+            histories.append({'target_match_id': 'SYN_1', 'player_id': player, 'history_rank': rank,
+                              'game_start_ts': timestamp, 'remake': remake, 'win': int(player < 5),
+                              'team_position': 'TOP', 'champion_id': 1, 'kills': 4, 'assists': 2, 'deaths': 2})
+    pd.DataFrame(participants).to_csv(export / 'participants.csv', index=False)
+    pd.DataFrame(histories).to_csv(export / 'player_history.csv', index=False)
+    folder = tmp_path / 'raw/timelines'
+    folder.mkdir(parents=True)
+    with gzip.open(folder / 'SYN_1.json.gz', 'wt') as stream:
+        json.dump({'info': {'frames': [{'events': [{'type': 'BUILDING_KILL',
+            'buildingType': 'INHIBITOR_BUILDING', 'teamId': 200, 'timestamp': 1200000}]}]}}, stream)
+    before = {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
+    result = demo.enrich_examples([{'match_id_interno': 'SYN_1'}], tmp_path)[0]
+    assert result['historial'] == {
+        'azul': {'winrate_10': 1., 'kda_medio': 3., 'partidas_con_campeon': 1.},
+        'rojo': {'winrate_10': 0., 'kda_medio': 3., 'partidas_con_campeon': 1.}}
+    assert result['eventos'] == [{'minuto': 20., 'tipo': 'inhibidor', 'equipo': 'azul'}]
+    assert before == {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
