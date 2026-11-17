@@ -196,32 +196,15 @@ h2 {
 #accuracy-summary { display: flex; justify-content: space-between; gap: 16px; }
 #accuracy-summary > span { display: flex; flex-direction: column; }
 #accuracy-summary strong { font-size: 28px; font-variant-numeric: tabular-nums; }
-body.presenting .vote strong,
 body.presenting .team-history dd,
 body.presenting #accuracy-summary strong { font-size: 64px; }
 body.presenting .team-history dt { font-size: 20px; }
 body.presenting #accuracy-summary { font-size: 20px; }
 body.presenting .team-history { margin: 4px 0; }
-body.presenting .vote strong,
 body.presenting .team-history dd,
 body.presenting #accuracy-summary strong { line-height: 1.05; }
-@media (min-width: 1000px) {
-  body.presenting .team {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    column-gap: 24px;
-  }
-  body.presenting .team h2,
-  body.presenting .team-history { grid-column: 1 / -1; }
-  body.presenting .team .roster { grid-column: 1; grid-row: 2; }
-  body.presenting .team .vote {
-    grid-column: 2;
-    grid-row: 2;
-    flex-direction: column;
-    justify-content: center;
-    gap: 0;
-  }
-}
+body.presenting .vote,
+body.presenting #reset-votes { display: none; }
 .reveal,
 .replay-controls {
   display: flex;

@@ -1,4 +1,5 @@
 """Contratos web con demo aislada y red bloqueada."""
+import re
 import json
 import shutil
 from pathlib import Path
@@ -151,3 +152,10 @@ def test_local_favicon(client):
         assert response.mimetype == 'image/svg+xml'
         assert ElementTree.fromstring(response.data).tag == '{http://www.w3.org/2000/svg}svg'
     assert client.get('/static/favicon.svg').data == client.get('/favicon.ico').data
+
+
+def test_presentation_hides_votes(client):
+    css = client.get('/static/app.css').text
+    rule = re.search(r'body\.presenting \.vote,\s*body\.presenting #reset-votes\s*\{\s*display:\s*none', css)
+    assert rule is not None
+    assert 'Tu voto' not in client.get('/').text
