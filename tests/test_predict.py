@@ -315,9 +315,12 @@ def live_game(queue=420, start=0, hidden=False, blocked=False):
 
 
 @pytest.fixture
-def live_env(monkeypatch):
+def live_env(monkeypatch, tmp_path):
     from src.agents import history_builder
     from src.riot_client import endpoints
+    monkeypatch.setattr(endpoints, "get_solo_queue_entry", lambda key: None)
+    monkeypatch.setattr(endpoints, "get_champion_mastery", lambda key, champion: None)
+    monkeypatch.setattr(predict, "MODELS_DIR", tmp_path / "models")
     state = {"game": live_game(), "cutoffs": [], "asked": []}
     monkeypatch.setattr(endpoints, "get_puuid", lambda name, tag: "ME")
     monkeypatch.setattr(endpoints, "get_active_game", lambda puuid: state["game"])
@@ -600,20 +603,33 @@ def test_train_refuses_without_a_test_result(world, models_dir):
 
 def test_train_force_warns_and_refits_on_every_match_touching_only_modelo_final(world, models_dir, quick_validation):
     lines = []
+    current = predict.load_model(models_dir / "modelo_final.joblib")
+    backup_name = f"modelo_final_{current['trained_at'][:10]}.joblib"
+    before = (models_dir / "modelo_final.joblib").read_bytes()
     others = {p.name: p.read_bytes() for p in models_dir.iterdir() if p.name != "modelo_final.joblib"}
     final = predict.train_command(world / "B", models_dir, force=True, out=lines.append)
     assert any("ADVERTENCIA" in l and "CONTAMINA" in l for l in lines)
     assert final["n_matches"] == N_DEV + N_TEST and final["development_ids"] == predict.load_model(
         models_dir / "modelo_candidato.joblib")["development_ids"]
-    assert {p.name: p.read_bytes() for p in models_dir.iterdir() if p.name != "modelo_final.joblib"} == others
+    assert (models_dir / backup_name).read_bytes() == before
+    assert {p.name: p.read_bytes() for p in models_dir.iterdir()
+            if p.name not in ("modelo_final.joblib", backup_name)} == others
     assert predict.load_model(models_dir / "modelo_final.joblib")["n_matches"] == N_DEV + N_TEST
 
 
 def test_train_after_a_test_result_needs_no_force_and_prints_no_warning(world, models_dir, quick_validation):
     run_evaluate(world / "B", models_dir)
+    tested = predict.load_model(models_dir / "modelo_final.joblib")
+    record_second(models_dir, tested)
     lines = []
-    predict.train_command(world / "B", models_dir, out=lines.append)
+    result = predict.train_command(world / "B", models_dir, out=lines.append)
     assert not any("ADVERTENCIA" in l for l in lines)
+    assert result["modelo_probado"]["trained_at"] == tested["trained_at"]
+    assert result["modelo_probado"]["selectiva"] == SELECTIVE
+    assert {k: result["modelo_probado"][k] for k in ("fecha", "n", "accuracy", "auc", "log_loss")} == {
+        "fecha": "2026-11-11", "n": 1264, "accuracy": .5704, "auc": .5891, "log_loss": .68}
+    assert result["modelo_probado"]["n_matches"] == tested["n_matches"]
+    assert predict.load_model(models_dir / "modelo_final.joblib")["modelo_probado"] == result["modelo_probado"]
 
 
 def test_weak_signal_warning_has_no_hardcoded_numbers(world, models_dir, bundle):
@@ -779,3 +795,407 @@ def test_second_record_leaves_first_test_unchanged(second_world, tmp_path, monke
     saved = json.loads((tmp_path / predict.SECOND_RESULT_NAME).read_text())['runs'][0]
     assert saved['calibracion'] == json.loads(json.dumps(r['calibracion']))
     assert saved['selectiva'] == r['selectiva']
+
+
+# --- Confidence, safe refit, context and watch (only synthetic endpoints) -------------------
+
+SELECTIVE = [{"threshold": t, "n": n, "accuracy": a}
+             for t, n, a in ((.55, 699, .5951), (.60, 275, .6582), (.65, 84, .6786))]
+
+
+def record_second(models_dir, bundle):
+    record = {"modelo_trained_at": bundle["trained_at"], "n": 1264, "fecha": "2026-11-11",
+              "modelos": {"final": {"accuracy": .5704, "auc": .5891, "log_loss": .68}},
+              "selectiva": {"final": SELECTIVE}}
+    (models_dir / predict.SECOND_RESULT_NAME).write_text(json.dumps({"runs": [record]}))
+
+
+@pytest.mark.parametrize("p,level", [(.5, "pareja"), (.521, "pareja"), (.55, "baja"), (.45, "baja"),
+                                    (.60, "media"), (.40, "media"), (.65, "alta"), (.35, "alta")])
+@pytest.mark.parametrize("selective", [None, SELECTIVE])
+def test_confidence_levels_and_exact_edges(p, level, selective):
+    result = predict.confidence_summary(p, selective)
+    assert result["nivel"] == level
+    assert result["confianza"] == max(p, 1 - p)
+    assert result["abstencion"] == (level == "pareja")
+    assert result["favorito"] == (None if level == "pareja" else "azul" if p > .5 else "rojo")
+    if selective and level != "pareja":
+        row = max((r for r in selective if max(p, 1-p) >= r["threshold"]), key=lambda r: r["threshold"])
+        assert result["acierto_historico"] == row["accuracy"]
+        assert result["n_historico"] == row["n"]
+    else:
+        assert "acierto_historico" not in result
+
+
+def test_confidence_source_and_warning(tmp_path, bundle):
+    assert "segunda prueba" not in predict._confidence_line(.623, bundle, tmp_path)
+    record_second(tmp_path, bundle)
+    text = predict._confidence_line(.623, bundle, tmp_path)
+    assert "62,3 %" in text and "65,8 % de 275" in text
+    assert "Confianza media" in text
+    refit = {**bundle, "modelo_probado": {"trained_at": "anterior", "n_matches": 2973,
+              "fecha": "2026-11-11", "n": 1264, "accuracy": .5704, "auc": .5891,
+              "log_loss": .68, "selectiva": SELECTIVE}}
+    assert "de la versión probada del modelo" in predict._confidence_line(.623, refit, tmp_path)
+    warning = predict._weak_signal_warning(refit, tmp_path)
+    assert "2973 partidas" in warning and "0.5891" in warning and "no tiene prueba independiente propia" in warning
+    assert "sin predicción" in predict._confidence_line(.521, refit, tmp_path)
+    # A historical run of another bundle cannot supply confidence for this one.
+    assert not predict._selectivity({**bundle, "trained_at": "otro"}, tmp_path)
+
+
+def test_train_needs_matching_second_test(world, models_dir):
+    run_evaluate(world / "B", models_dir)
+    before = (models_dir / "modelo_final.joblib").read_bytes()
+    record_second(models_dir, {"trained_at": "otro"})
+    with pytest.raises(predict.PredictError, match="segunda prueba"):
+        predict.train_command(world / "B", models_dir, out=lambda _: None)
+    assert (models_dir / "modelo_final.joblib").read_bytes() == before
+
+
+def test_train_does_not_overwrite_different_backup(world, models_dir):
+    before = (models_dir / "modelo_final.joblib").read_bytes()
+    current = predict.load_model(models_dir / "modelo_final.joblib")
+    path = models_dir / f"modelo_final_{current['trained_at'][:10]}.joblib"
+    path.write_bytes(b"otra copia")
+    with pytest.raises(predict.PredictError, match="otro contenido"):
+        predict.train_command(world / "B", models_dir, force=True, out=lambda _: None)
+    assert path.read_bytes() == b"otra copia"
+    assert (models_dir / "modelo_final.joblib").read_bytes() == before
+
+
+def test_backup_reuses_identical_copy(tmp_path):
+    path = tmp_path / "modelo_final.joblib"
+    path.write_bytes(b"modelo")
+    bundle = {"trained_at": "2026-11-09T18:09:41+00:00"}
+    backup = predict._backup_model(path, bundle)
+    assert predict._backup_model(path, bundle) == backup
+    assert backup.read_bytes() == path.read_bytes()
+
+
+def test_context_columns_private_missing_and_independent(live_env, bundle, tmp_path, monkeypatch):
+    from src.riot_client import endpoints
+    live_env["game"] = live_game(hidden=True, blocked=True)
+    calls = []
+    def entry(key):
+        calls.append(key)
+        if key.endswith("_2"):
+            raise requests.ConnectionError("https://secret/" + key)
+        return {"tier": "GOLD", "rank": "II", "leaguePoints": 50, "wins": 9, "losses": 8}
+    monkeypatch.setattr(endpoints, "get_solo_queue_entry", entry)
+    monkeypatch.setattr(endpoints, "get_champion_mastery", lambda *a: {"championPoints": 123})
+    run_live(bundle, tmp_path)
+    path = tmp_path / "live_context.csv"
+    with path.open() as f:
+        reader = csv.DictReader(f)
+        assert reader.fieldnames == predict.CONTEXT_COLUMNS
+        rows = list(reader)
+    assert len(rows) == 10 and len(calls) == 8
+    assert rows[0]["tier"] == rows[1]["tier"] == rows[2]["tier"] == ""
+    assert rows[2]["maestria_puntos"] == "123"
+    assert rows[3]["tier"] == "GOLD" and rows[3]["segundos_de_partida"] == "0"
+    assert SECRET not in path.read_text() and "Name#TAG" not in path.read_text()
+    assert "puuid" not in path.read_text()
+    run_live(bundle, tmp_path)
+    assert len(path.read_text().splitlines()) == 11
+
+
+def test_context_mastery_failure_and_elapsed(live_env, bundle, tmp_path, monkeypatch):
+    from src.riot_client import endpoints
+    monkeypatch.setattr(predict.time, "time", lambda: 1700000000)
+    live_env["game"] = live_game(start=1699999980000)
+    def fail(*a):
+        raise requests.Timeout("private URL")
+    monkeypatch.setattr(endpoints, "get_champion_mastery", fail)
+    run_live(bundle, tmp_path)
+    with (tmp_path / "live_context.csv").open() as f:
+        rows = list(csv.DictReader(f))
+    assert all(r["maestria_puntos"] == "" and r["segundos_de_partida"] == "20" for r in rows)
+
+
+def test_watch_skips_and_continues_until_max(live_env, bundle, tmp_path, monkeypatch):
+    from src.riot_client import endpoints
+    seeds = ["ab--cd", "none", "queue", "incomplete", "duplicate", "network", "valid", "never"]
+    monkeypatch.setattr(predict, "_seed_players", lambda path: seeds)
+    live_env["game"]["gameId"] = 99
+    run_live(bundle, tmp_path)
+    asked = []
+    def active(key):
+        asked.append(key)
+        if key == "none":
+            return None
+        if key == "network":
+            raise requests.ConnectionError("https://private/SECRETPUUID")
+        game = live_game(queue=450 if key == "queue" else 420)
+        if key == "incomplete":
+            game["participants"].pop()
+        if key == "duplicate":
+            game["gameId"] = 99
+        return game
+    monkeypatch.setattr(endpoints, "get_active_game", active)
+    lines = []
+    counts = predict.watch(bundle, max_games=1, log_path=tmp_path / "log.csv", out=lines.append, names={})
+    assert counts == dict(revisados=7, predichas=1, bloqueados=1, sin_partida=1, otra_cola=1,
+                          incompletas=1, registradas=1, errores=1, errores_prediccion=0)
+    assert "never" not in asked
+    text = "\n".join(lines)
+    assert "Equipo azul" in text and ("Confianza" in text or "Partida pareja" in text)
+    assert SECRET not in text and "Name#TAG" not in text and "https://" not in text
+
+
+def test_watch_respects_deadline_and_ctrl_c(bundle, tmp_path, monkeypatch):
+    from src.riot_client import endpoints
+    monkeypatch.setattr(predict, "_seed_players", lambda path: ["private"])
+    ticks = iter([0, 0, 61, 61, 61])
+    monkeypatch.setattr(predict.time, "monotonic", lambda: next(ticks))
+    r = predict.watch(bundle, watch_minutes=1, log_path=tmp_path / "log.csv", out=lambda _: None)
+    assert r["revisados"] == 0
+    monkeypatch.setattr(predict.time, "monotonic", lambda: 0)
+    def interrupt(key):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(endpoints, "get_active_game", interrupt)
+    lines = []
+    r = predict.watch(bundle, log_path=tmp_path / "log.csv", out=lines.append)
+    assert r["predichas"] == 0 and "interrumpida" in lines[0]
+
+
+def test_seed_database_read_only(tmp_path):
+    import sqlite3
+    path = tmp_path / "seeds.sqlite"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE players (puuid TEXT)")
+    conn.execute("INSERT INTO players VALUES ('private')")
+    conn.commit()
+    conn.close()
+    before = path.read_bytes()
+    assert predict._seed_players(path) == ["private"]
+    assert path.read_bytes() == before
+    with pytest.raises(sqlite3.OperationalError):
+        predict._seed_players(tmp_path / "missing.sqlite")
+    assert not (tmp_path / "missing.sqlite").exists()
+
+
+def test_score_log_selectivity_loss_small_sample(tmp_path, monkeypatch, bundle, capsys):
+    path = tmp_path / "log.csv"
+    write_log(path, [.52, .6, .7, .3])
+    r = predict.score_log(path, lambda mid: fake_match(blue_win=int(mid.split("_")[1]) != 3))
+    assert r["log_loss"] == pytest.approx(-np.log([.52, .6, .7, .7]).mean())
+    assert r["abstenciones"] == 1
+    assert [row["n"] for row in r["selectiva"]] == [3, 3, 2]
+    assert all(row["lo"] < row["accuracy"] <= row["hi"] for row in r["selectiva"])
+    monkeypatch.setattr(predict, "_load_checked", lambda: bundle)
+    monkeypatch.setattr(predict, "score_log", lambda **kw: r)
+    predict._score_log_command()
+    text = capsys.readouterr().out
+    assert "demasiado pequeña" in text and "Wilson" in text and "pérdida logarítmica" in text
+
+
+
+def test_confidence_sparse_history_uses_actual_threshold(tmp_path, bundle):
+    record_second(tmp_path, bundle)
+    tested = {"selectiva": SELECTIVE[:1]}
+    text = predict._confidence_line(.7, {**bundle, "modelo_probado": tested}, tmp_path)
+    assert "Confianza alta" in text and "55 % o más" in text and "699 partidas" in text
+
+
+def test_score_log_empty_selection_and_other_models(tmp_path, bundle):
+    path = tmp_path / "log.csv"
+    write_log(path, [.52, .56])
+    mine = {**bundle, "trained_at": "t"}
+    predict.log_prediction(99, "LA1", .8, bundle, path)
+    r = predict.score_log(path, lambda mid: fake_match(blue_win=1), bundle=mine)
+    assert r["n"] == 2 and r["otro_modelo"] == 1 and r["logged"] == 3
+    assert r["selectiva"][1]["n"] == 0 and r["selectiva"][1]["accuracy"] is None
+    assert r["selectiva"][2]["lo"] is None
+
+
+@pytest.mark.parametrize("args", [["--watch", "--max-games", "0"], ["--watch", "--watch-minutes", "-1"],
+                                  ["--watch", "--live", "Private#TAG"], ["--watch", "--evaluate-final"]])
+def test_watch_cli_rejects_invalid_arguments(monkeypatch, args):
+    monkeypatch.setattr("sys.argv", ["predict", *args])
+    with pytest.raises(SystemExit) as error:
+        predict.main()
+    assert error.value.code == 2
+
+
+
+def test_live_errors_do_not_echo_player(live_env, bundle, tmp_path, monkeypatch):
+    from src.riot_client import endpoints
+    def missing(*args):
+        raise http_404()
+    monkeypatch.setattr(endpoints, "get_puuid", missing)
+    with pytest.raises(predict.LiveError) as error:
+        run_live(bundle, tmp_path)
+    assert "Name#TAG" not in str(error.value) and "http" not in str(error.value)
+
+
+def test_prediction_commands_include_confidence(bundle, monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(predict, "MODELS_DIR", tmp_path / "models")
+    monkeypatch.setattr(predict, "_load_checked", lambda: bundle)
+    monkeypatch.setattr(predict, "predict_match", lambda *a: {"prob_blue": .623, "prob_red": .377,
+        "blue_win": 1, "en_entrenamiento": False, "jugadores_sin_historial": 0})
+    predict._predict_command("LA1_1")
+    assert "Confianza media (62,3 %)" in capsys.readouterr().out
+    monkeypatch.setattr(predict, "predict_live", lambda *a: {"prob_blue": .521, "prob_red": .479,
+        "teams": {}, "jugadores_sin_historial": 0, "logged": True})
+    predict._live_command("Private#TAG")
+    text = capsys.readouterr().out
+    assert "Partida pareja: sin predicción" in text and "Private#TAG" not in text
+
+
+
+def test_confidence_highest_threshold_without_outcomes(tmp_path):
+    rows = [*SELECTIVE[:2], {"threshold": .65, "n": 0, "accuracy": None}]
+    summary = predict.confidence_summary(.7, rows)
+    assert summary["n_historico"] == 0 and summary["acierto_historico"] is None
+    text = predict._confidence_line(.7, {"modelo_probado": {"selectiva": rows}}, tmp_path)
+    assert "Confianza alta" in text and "acertó" not in text
+
+
+@pytest.mark.parametrize("failure", [OSError, KeyboardInterrupt])
+def test_context_publish_failure_is_retryable_and_atomic(live_env, bundle, tmp_path, monkeypatch, failure):
+    from pathlib import Path
+    # Keep another game's context intact when publishing the next game fails.
+    live_env["game"]["gameId"] = 998
+    run_live(bundle, tmp_path)
+    context = tmp_path / "live_context.csv"
+    before = context.read_bytes()
+    live_env["game"]["gameId"] = 999
+    with monkeypatch.context() as patch:
+        def fail(*args):
+            raise failure("fallo simulado")
+        patch.setattr(Path, "replace", fail)
+        with pytest.raises(failure):
+            run_live(bundle, tmp_path)
+    assert context.read_bytes() == before
+    assert predict._logged_games(tmp_path / "log.csv") == {("LA1", "998")}
+    assert {p.name for p in tmp_path.iterdir()} == {"live_context.csv", "log.csv"}
+    result, _ = run_live(bundle, tmp_path)
+    assert result["logged"]
+    assert predict._context_games(context) == {("LA1", "998"), ("LA1", "999")}
+    assert len(list(csv.DictReader(context.open()))) == 20
+
+
+def test_interruption_between_context_and_log_does_not_duplicate_context(live_env, bundle, tmp_path, monkeypatch):
+    from src.riot_client import endpoints
+    calls = []
+    monkeypatch.setattr(endpoints, "get_solo_queue_entry", lambda key: calls.append(1))
+    with monkeypatch.context() as patch:
+        def interrupt(*args):
+            raise KeyboardInterrupt
+        patch.setattr(predict, "log_prediction", interrupt)
+        with pytest.raises(KeyboardInterrupt):
+            run_live(bundle, tmp_path)
+    assert not (tmp_path / "log.csv").exists()
+    assert predict._context_games(tmp_path / "live_context.csv") == {("LA1", "999")}
+    result, _ = run_live(bundle, tmp_path)
+    assert result["logged"] and len(calls) == 10
+    assert len(list(csv.DictReader((tmp_path / "live_context.csv").open()))) == 10
+
+
+@pytest.mark.parametrize("partial", [False, True])
+@pytest.mark.parametrize("mode", ["live", "watch"])
+def test_existing_log_with_missing_or_partial_context_is_repaired(live_env, bundle, tmp_path, monkeypatch,
+                                                                  partial, mode):
+    context = tmp_path / "live_context.csv"
+    if partial:
+        run_live(bundle, tmp_path)
+        context.write_text("\n".join(context.read_text().splitlines()[:4]) + "\n")
+    else:
+        predict.log_prediction(999, "LA1", .6, bundle, tmp_path / "log.csv")
+    original_log = (tmp_path / "log.csv").read_bytes()
+    if mode == "live":
+        result, _ = run_live(bundle, tmp_path)
+        assert not result["logged"]
+    else:
+        from src.riot_client import endpoints
+        monkeypatch.setattr(predict, "_seed_players", lambda _: ["first", "next"])
+        def active(seed):
+            if seed == "next":
+                raise KeyboardInterrupt
+            return live_env["game"]
+        monkeypatch.setattr(endpoints, "get_active_game", active)
+        counts = predict.watch(bundle, log_path=tmp_path / "log.csv", out=lambda _: None, names={})
+        assert counts["registradas"] == 1 and counts["predichas"] == 0
+    assert predict._context_games(context) == {("LA1", "999")}
+    assert len(list(csv.DictReader(context.open()))) == 10
+    assert (tmp_path / "log.csv").read_bytes() == original_log
+
+
+@pytest.mark.parametrize("failure", [ValueError, predict.LiveError, RuntimeError])
+def test_watch_continues_after_prediction_failure(live_env, bundle, tmp_path, monkeypatch, failure):
+    original = predict.score_game
+    calls = []
+    def score(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise failure("https://private/" + SECRET + " Name#TAG")
+        return original(*args, **kwargs)
+    monkeypatch.setattr(predict, "score_game", score)
+    monkeypatch.setattr(predict, "_seed_players", lambda _: ["first", "next", "never"])
+    lines = []
+    counts = predict.watch(bundle, max_games=1, log_path=tmp_path / "log.csv", out=lines.append, names={})
+    assert counts["revisados"] == 2 and counts["predichas"] == 1
+    assert counts["errores_prediccion"] == 1 and counts["errores"] == 0
+    assert lines[-1].startswith("Resumen de vigilancia:")
+    text = "\n".join(lines)
+    assert SECRET not in text and "Name#TAG" not in text and "https://" not in text
+
+
+@pytest.mark.parametrize("stage", ["active", "history", "rank", "mastery"])
+def test_watch_deadline_during_download_stops_without_incomplete_log(live_env, bundle, tmp_path, monkeypatch, stage):
+    from src.agents import history_builder
+    from src.riot_client import client, endpoints
+    now = [0.0]
+    calls = []
+    monkeypatch.setattr(predict.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(predict, "_seed_players", lambda _: ["first", "never"])
+    def expire(*args, **kwargs):
+        calls.append(1)
+        now[0] = 61.0
+        return live_env["game"] if stage == "active" else ([] if stage == "history" else {})
+    owner, attr = {
+        "active": (endpoints, "get_active_game"),
+        "history": (history_builder, "player_history"),
+        "rank": (endpoints, "get_solo_queue_entry"),
+        "mastery": (endpoints, "get_champion_mastery"),
+    }[stage]
+    monkeypatch.setattr(owner, attr, expire)
+    lines = []
+    counts = predict.watch(bundle, watch_minutes=1, log_path=tmp_path / "log.csv", out=lines.append, names={})
+    assert counts["revisados"] == 1 and counts["predichas"] == 0
+    assert counts["errores"] == counts["errores_prediccion"] == 0
+    assert len(calls) == 1 and not (tmp_path / "log.csv").exists()
+    assert not (tmp_path / "live_context.csv").exists()
+    assert lines[-1].startswith("Resumen de vigilancia:")
+    assert client.check_deadline() is None  # The next --live has no watch deadline.
+
+
+@pytest.mark.parametrize("status", [401, 403])
+@pytest.mark.parametrize("stage", ["active", "rank", "mastery"])
+def test_watch_stops_when_riot_rejects_the_key(live_env, bundle, tmp_path, monkeypatch, status, stage):
+    from src.riot_client import endpoints
+    monkeypatch.setattr(predict, "_seed_players", lambda path: ["first", "second"])
+    asked = []
+    calls = []
+    def query(current, result):
+        calls.append(current)
+        if current == stage:
+            response = requests.Response()
+            response.status_code = status
+            raise requests.HTTPError("https://private/SECRETPUUID", response=response)
+        return result
+    def active(key):
+        asked.append(key)
+        return query("active", live_env["game"])
+    monkeypatch.setattr(endpoints, "get_active_game", active)
+    monkeypatch.setattr(endpoints, "get_solo_queue_entry", lambda key: query("rank", None))
+    monkeypatch.setattr(endpoints, "get_champion_mastery", lambda *args: query("mastery", None))
+    lines = []
+    counts = predict.watch(bundle, max_games=1, log_path=tmp_path / "log.csv", out=lines.append, names={})
+    assert asked == ["first"] and counts["errores"] == 0 and counts["predichas"] == 0
+    assert calls == ["active", "rank", "mastery"][:["active", "rank", "mastery"].index(stage) + 1]
+    assert not (tmp_path / "log.csv").exists()
+    assert not (tmp_path / "live_context.csv").exists()
+    text = "\n".join(lines)
+    assert "rechazó la clave" in text and "Resumen de vigilancia" in text and "https://" not in text

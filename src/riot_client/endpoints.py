@@ -2,7 +2,7 @@ import requests
 
 from src.riot_client.config import REGION_URL, PLATFORM_URL
 from src.riot_client.client import get
-from src.riot_client.cache import load_match, save_match
+from src.riot_client.cache import load_match, save_match, load_timeline, save_timeline
 
 
 def get_puuid(game_name: str, tag_line: str) -> str:
@@ -31,6 +31,16 @@ def get_match(match_id: str) -> dict:
     match = get(f"{REGION_URL}/lol/match/v5/matches/{match_id}")
     save_match(match_id, match)
     return match
+
+def get_match_timeline(match_id: str) -> dict:
+    """Return the complete match timeline, downloading only on a cache miss."""
+    cached = load_timeline(match_id)
+    if cached is not None:
+        return cached
+    timeline = get(f"{REGION_URL}/lol/match/v5/matches/{match_id}/timeline")
+    save_timeline(match_id, timeline)
+    return timeline
+
 
 def get_league_entries(tier: str, division: str) -> list[dict]:
     league_entries = get(f"{PLATFORM_URL}/lol/league/v4/entries/RANKED_SOLO_5x5/{tier}/{division}")

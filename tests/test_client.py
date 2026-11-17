@@ -159,3 +159,45 @@ def test_429_forever_gives_up(fake_api):
     fake_api["responses"] = [FakeResponse(429, headers={"Retry-After": "10"})]
     with pytest.raises(client.RiotUnavailableError, match="429"):
         client.get("https://example")
+
+
+@pytest.mark.parametrize("response", [FakeResponse(429, headers={"Retry-After": "120"}),
+                                      FakeResponse(503), requests.ConnectionError("private")])
+def test_watch_deadline_caps_retries(fake_api, response):
+    fake_api["responses"] = [response]
+    with client.request_deadline(1000.5):
+        with pytest.raises(client.RequestDeadlineExceeded):
+            client.get("https://example")
+    assert fake_api["calls"] == 1
+    assert fake_api["now"] == 1000.5
+    assert client.check_deadline() is None
+
+
+def test_watch_deadline_caps_rate_limit_wait(fake_api, monkeypatch):
+    monkeypatch.setattr(client, "_last_call_time", 1000.0)
+    with client.request_deadline(1000.5):
+        with pytest.raises(client.RequestDeadlineExceeded):
+            client.get("https://example")
+    assert fake_api["calls"] == 0
+    assert fake_api["now"] == 1000.5
+
+
+def test_watch_deadline_caps_request_timeout_and_rejects_late_response(fake_api, monkeypatch):
+    timeouts = []
+    def get(*args, **kwargs):
+        timeouts.append(kwargs["timeout"])
+        fake_api["now"] += kwargs["timeout"]
+        return FakeResponse(200, {})
+    monkeypatch.setattr(client.requests, "get", get)
+    with client.request_deadline(1000.25):
+        with pytest.raises(client.RequestDeadlineExceeded):
+            client.get("https://example")
+    assert timeouts == [.25]
+    assert fake_api["sleeps"] == []
+
+
+def test_expired_watch_deadline_sends_no_request(fake_api):
+    with client.request_deadline(999):
+        with pytest.raises(client.RequestDeadlineExceeded):
+            client.get("https://example")
+    assert fake_api["calls"] == 0 and fake_api["sleeps"] == []

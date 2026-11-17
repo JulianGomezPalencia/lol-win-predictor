@@ -32,9 +32,12 @@ Tests:    pytest tests/test_predict.py -v
 import argparse
 import csv
 import filecmp
+import hashlib
+import sqlite3
 import json
 import shutil
 import time
+import tempfile
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
@@ -60,6 +63,10 @@ TEST_RESULT_NAME, DEVELOPMENT_NAME = "prueba_final.json", "conjunto_desarrollo.c
 LOGISTIC = "Regresión logística"
 LOG_PATH = PROJECT_ROOT / "data" / "predictions" / "live_log.csv"
 LOG_COLUMNS = ["game_id", "platform", "timestamp", "prob_blue", "model_trained_at"]
+CONTEXT_COLUMNS = ["game_id", "platform", "timestamp", "team_id", "posicion", "champion_id",
+                   "tier", "division", "lp", "wins", "losses", "maestria_puntos", "segundos_de_partida"]
+ABSTAIN_BELOW = 0.55
+CONFIDENCE_LEVELS = [(0.65, "alta"), (0.60, "media"), (0.55, "baja")]
 RANKED_SOLO_QUEUE = 420
 MIN_FINISHED_FOR_AUC = 10
 BUNDLE_VERSION = 2
@@ -148,6 +155,54 @@ def check_bundle(bundle: dict) -> None:
         raise ValueError(RETRAIN_MESSAGE)
 
 
+
+def confidence_summary(prob_blue, selective=None) -> dict:
+    confidence = max(prob_blue, 1 - prob_blue)
+    level = next((name for threshold, name in CONFIDENCE_LEVELS if confidence >= threshold), "pareja")
+    result = {"confianza": confidence, "nivel": level, "abstencion": level == "pareja",
+              "favorito": None if level == "pareja" else ("azul" if prob_blue >= .5 else "rojo")}
+    rows = [r for r in (selective or []) if confidence >= r["threshold"]]
+    if rows and level != "pareja":
+        row = max(rows, key=lambda r: r["threshold"])
+        result.update(acierto_historico=row["accuracy"], n_historico=row["n"])
+    return result
+
+
+def _second_test(bundle, models_dir):
+    runs = [r for r in _read_test_runs(models_dir, SECOND_RESULT_NAME)
+            if r.get("modelo_trained_at") == bundle.get("trained_at") and r.get("n", 0) > 0]
+    return runs[-1] if runs else None
+
+
+def _selectivity(bundle, models_dir):
+    if bundle.get("modelo_probado"):
+        return bundle["modelo_probado"].get("selectiva", [])
+    try:
+        run = _second_test(bundle, models_dir)
+    except (OSError, ValueError):
+        return []
+    return run.get("selectiva", {}).get("final", []) if run else []
+
+
+def _percent(value):
+    return f"{value * 100:.1f}".replace(".", ",") + " %"
+
+
+def _confidence_line(prob_blue, bundle, models_dir=None):
+    selective = _selectivity(bundle, models_dir or MODELS_DIR)
+    summary = confidence_summary(prob_blue, selective)
+    confidence = _percent(summary["confianza"])
+    if summary["abstencion"]:
+        return f"Partida pareja: sin predicción (confianza {confidence}, por debajo de 55 %)."
+    text = f"Predicción: gana el equipo {summary['favorito']}. Confianza {summary['nivel']} ({confidence})."
+    if summary.get("acierto_historico") is not None:
+        threshold = max(r["threshold"] for r in selective
+                        if summary["confianza"] >= r["threshold"])
+        source = " de la versión probada del modelo" if bundle.get("modelo_probado") else ""
+        text += (f" En la segunda prueba{source}, con confianza de {threshold * 100:.0f} % o más "
+                 f"acertó el {_percent(summary['acierto_historico'])} de {summary['n_historico']} partidas.")
+    return text
+
 # --- One path for every prediction: players + their histories -> probability ----------------
 
 
@@ -199,6 +254,7 @@ def score_game(game_id: str, start_ts: int, players: list[dict], histories: dict
         raise ValueError(f"El modelo guardado usa variables que ya no existen: {missing}. Vuelve a entrenar con --train.")
     prob_blue = float(bundle["model"].predict_proba(table[bundle["features"]])[0, 1])
     return {"prob_blue": prob_blue, "prob_red": 1 - prob_blue, "roles": roles,
+            "feature_values": table[bundle["features"]].iloc[0].to_dict(),
             "jugadores_sin_historial": sum(1 for p in players
                                           if all(game["remake"] for game in histories.get(p["key"], [])))}
 
@@ -269,23 +325,32 @@ def log_prediction(game_id, platform: str, prob_blue: float, bundle: dict, path:
 
 
 def predict_live(riot_id: str, bundle: dict, progress=print, log_path: Path | None = None,
-                 names: dict[int, str] | None = None) -> dict:
+                 names: dict[int, str] | None = None, *, persist: bool = True) -> dict:
     """Predict the game `riot_id` is playing now. Raises LiveError when there is nothing to predict."""
     check_bundle(bundle)
-    from src.agents import history_builder
-    from src.riot_client import config, endpoints
+    from src.riot_client import endpoints
     name, tag = parse_riot_id(riot_id)
     try:
         puuid = endpoints.get_puuid(name, tag)
     except requests.HTTPError as error:
         if endpoints.is_not_found(error):
-            raise LiveError(f"No existe el Riot ID {riot_id}.")
+            raise LiveError("No existe el jugador solicitado.")
         raise
     if endpoints.is_firewall_blocked(puuid):
         raise LiveError("El firewall de Riot bloquea las consultas sobre este jugador; no se puede predecir su partida.")
     game = endpoints.get_active_game(puuid)
     if game is None:
-        raise LiveError(f"{riot_id} no está en una partida ahora mismo.")
+        raise LiveError("El jugador no está en una partida ahora mismo.")
+    return predict_live_game(game, bundle, progress, log_path, names, persist=persist)
+
+
+def predict_live_game(game: dict, bundle: dict, progress=print, log_path: Path | None = None,
+                      names: dict[int, str] | None = None, *, persist: bool = True) -> dict:
+    """Ruta compartida por --live y --watch a partir de spectator-v5."""
+    check_bundle(bundle)
+    from src.agents import history_builder
+    from src.riot_client import config, endpoints
+    from src.riot_client.client import check_deadline
     if game.get("gameQueueConfigId") != RANKED_SOLO_QUEUE:
         raise LiveError(f"La partida es de la cola {game.get('gameQueueConfigId')}, no ranked solo/duo "
                         f"({RANKED_SOLO_QUEUE}); el modelo solo vale para ranked solo/duo.")
@@ -295,6 +360,7 @@ def predict_live(riot_id: str, bundle: dict, progress=print, log_path: Path | No
     start_ms = game.get("gameStartTime") or int(time.time() * 1000)  # 0 while the game is loading
     players, histories = [], {}
     for i, p in enumerate(raw, start=1):
+        check_deadline()
         key = p.get("puuid") or f"oculto_{i}"
         players.append({"key": key, "team_id": p["teamId"], "champion_id": p["championId"],
                         "champion_name": "", "spell_ids": (p.get("spell1Id"), p.get("spell2Id"))})
@@ -303,6 +369,7 @@ def predict_live(riot_id: str, bundle: dict, progress=print, log_path: Path | No
         histories[key] = [] if hidden else history_builder.player_history(key, start_ms)
     game_id = game.get("gameId")
     platform = game.get("platformId") or config.PLATFORM.upper()
+    check_deadline()
     result = score_game(f"{platform}_{game_id}", start_ms, players, histories, bundle)
     names = champion_names() if names is None else names
     teams = {}
@@ -311,11 +378,170 @@ def predict_live(riot_id: str, bundle: dict, progress=print, log_path: Path | No
         teams.setdefault(p["team_id"], []).append((result["roles"][p["key"]], label))
     order = {pos: n for n, pos in enumerate(build.POSITIONS)}
     teams = {team: sorted(members, key=lambda m: order[m[0]]) for team, members in teams.items()}
-    logged = log_prediction(game_id, platform, result["prob_blue"], bundle, log_path)
+    context_path = Path(log_path or LOG_PATH).with_name("live_context.csv")
+    check_deadline()
+    if persist:
+        _log_context(game, players, result["roles"], platform, context_path)
+    check_deadline()
+    logged = log_prediction(game_id, platform, result["prob_blue"], bundle, log_path) if persist else False
     return {"game_id": game_id, "platform": platform, "teams": teams, "logged": logged,
+            "feature_values": result.get("feature_values", {}),
             "prob_blue": result["prob_blue"], "prob_red": result["prob_red"],
             "jugadores_sin_historial": result["jugadores_sin_historial"]}
 
+
+
+def _log_context(game, players, roles, platform, path):
+    from src.riot_client import endpoints
+    from src.riot_client.client import RiotUnavailableError, check_deadline
+    game_key = (platform, str(game["gameId"]))
+    if game_key in _context_games(path):
+        return
+    timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    start = game.get("gameStartTime") or 0
+    seconds = max(0, int(time.time() - start / 1000)) if start else 0
+    rows = []
+    # Consultado durante la partida: este contexto no incluye su resultado ni entra en el modelo.
+    for raw, player in zip(game["participants"], players):
+        check_deadline()
+        entry, mastery = {}, {}
+        key = raw.get("puuid")
+        if key and not endpoints.is_firewall_blocked(key):
+            try:
+                entry = endpoints.get_solo_queue_entry(key) or {}
+            except (requests.RequestException, RiotUnavailableError) as error:
+                if getattr(getattr(error, "response", None), "status_code", None) in (401, 403):
+                    raise
+            check_deadline()
+            try:
+                mastery = endpoints.get_champion_mastery(key, player["champion_id"]) or {}
+            except (requests.RequestException, RiotUnavailableError) as error:
+                if getattr(getattr(error, "response", None), "status_code", None) in (401, 403):
+                    raise
+        rows.append([game["gameId"], platform, timestamp, player["team_id"], roles[player["key"]],
+                     player["champion_id"], entry.get("tier", ""), entry.get("rank", ""),
+                     entry.get("leaguePoints", ""), entry.get("wins", ""), entry.get("losses", ""),
+                     mastery.get("championPoints", ""), seconds])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # Sustituir una partida incompleta y publicar sus diez filas de una sola vez.
+    previous = []
+    if path.exists():
+        with path.open(newline="", encoding="utf-8") as f:
+            previous = [r for r in csv.DictReader(f) if (r["platform"], r["game_id"]) != game_key]
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", newline="", encoding="utf-8",
+                                         dir=path.parent, delete=False) as f:
+            temporary = Path(f.name)
+            writer = csv.writer(f)
+            writer.writerow(CONTEXT_COLUMNS)
+            writer.writerows([r[c] for c in CONTEXT_COLUMNS] for r in previous)
+            writer.writerows(rows)
+        check_deadline()
+        temporary.replace(path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def _context_games(path):
+    """Partidas con las diez posiciones guardadas; permite reparar registros antiguos."""
+    if not path.exists():
+        return set()
+    positions = {}
+    counts = {}
+    with path.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            key = (row["platform"], row["game_id"])
+            counts[key] = counts.get(key, 0) + 1
+            positions.setdefault(key, set()).add((row["team_id"], row["posicion"]))
+    expected = {(str(team), pos) for team in (100, 200) for pos in build.POSITIONS}
+    return {key for key, roles in positions.items() if roles == expected and counts[key] == 10}
+
+
+class KeyRejected(Exception):
+    """Riot respondió 401 o 403 durante la vigilancia: la clave no es válida o caducó."""
+
+
+def _logged_games(path):
+    if not path.exists():
+        return set()
+    with path.open(newline="", encoding="utf-8") as f:
+        return {(r["platform"], r["game_id"]) for r in csv.DictReader(f)}
+
+
+def _seed_players(db_path=None):
+    from src.storage.db import DB_PATH
+    path = Path(db_path or DB_PATH).resolve()
+    conn = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)
+    try:
+        return [r[0] for r in conn.execute("SELECT puuid FROM players ORDER BY puuid")]
+    finally:
+        conn.close()
+
+
+def watch(bundle, watch_minutes=60, max_games=20, db_path=None, log_path=None, out=print, names=None):
+    from src.riot_client import config, endpoints
+    from src.riot_client.client import (RiotUnavailableError, RequestDeadlineExceeded,
+                                        request_deadline, check_deadline)
+    if watch_minutes <= 0 or max_games <= 0:
+        raise PredictError("Los minutos y el máximo de partidas deben ser positivos.")
+    check_bundle(bundle)
+    seeds = _seed_players(db_path)
+    path = Path(log_path or LOG_PATH)
+    seen = _logged_games(path) & _context_games(path.with_name("live_context.csv"))
+    counts = dict(revisados=0, predichas=0, bloqueados=0, sin_partida=0, otra_cola=0,
+                  incompletas=0, registradas=0, errores=0, errores_prediccion=0)
+    deadline = time.monotonic() + watch_minutes * 60
+    try:
+        with request_deadline(deadline):
+            while seeds and time.monotonic() < deadline and counts["predichas"] < max_games:
+                for seed in seeds:
+                    if time.monotonic() >= deadline or counts["predichas"] >= max_games:
+                        break
+                    counts["revisados"] += 1
+                    if endpoints.is_firewall_blocked(seed):
+                        counts["bloqueados"] += 1
+                        continue
+                    try:
+                        game = endpoints.get_active_game(seed)
+                        check_deadline()
+                        if game is None:
+                            counts["sin_partida"] += 1
+                            continue
+                        if game.get("gameQueueConfigId") != RANKED_SOLO_QUEUE:
+                            counts["otra_cola"] += 1
+                            continue
+                        if len(game.get("participants", [])) != 10:
+                            counts["incompletas"] += 1
+                            continue
+                        key = (game.get("platformId") or config.PLATFORM.upper(), str(game.get("gameId")))
+                        if key in seen:
+                            counts["registradas"] += 1
+                            continue
+                        result = predict_live_game(game, bundle, progress=lambda _: None, log_path=path, names=names)
+                        seen.add(key)
+                        counts["predichas" if result["logged"] else "registradas"] += 1
+                        _print_live_result(result, bundle, out)
+                    except (requests.RequestException, RiotUnavailableError) as error:
+                        # Un 401/403 no es un fallo de un jugador: la clave no sirve y seguir no aporta nada.
+                        if getattr(getattr(error, "response", None), "status_code", None) in (401, 403):
+                            raise KeyRejected()
+                        counts["errores"] += 1
+                    except RequestDeadlineExceeded:
+                        raise
+                    except Exception:
+                        counts["errores_prediccion"] += 1
+                if counts["predichas"] < max_games:
+                    time.sleep(min(30, max(0, deadline - time.monotonic())))
+    except RequestDeadlineExceeded:
+        out("Se agotó el plazo de vigilancia.")
+    except KeyRejected:
+        out("Riot rechazó la clave (HTTP 401 o 403): puede haber caducado. Vigilancia detenida.")
+    except KeyboardInterrupt:
+        out("Vigilancia interrumpida.")
+    out("Resumen de vigilancia: " + "; ".join(f"{k}: {v}" for k, v in counts.items()))
+    return counts
 
 # --- Forward test of the frozen model ------------------------------------------------------
 
@@ -329,7 +555,7 @@ def score_log(log_path: Path | None = None, get_match=None, bundle: dict | None 
     path = Path(log_path or LOG_PATH)
     if not path.exists():
         return {"n": 0, "pendientes": 0, "descartadas": 0, "accuracy": None, "auc": None, "logged": 0,
-                "otro_modelo": 0}
+                "otro_modelo": 0, "log_loss": None, "selectiva": [], "abstenciones": 0}
     if get_match is None:
         from src.riot_client import endpoints
         get_match = endpoints.get_match
@@ -359,9 +585,14 @@ def score_log(log_path: Path | None = None, get_match=None, bundle: dict | None 
     n = len(probs)
     y, p = np.array(outcomes), np.array(probs)
     both = n >= MIN_FINISHED_FOR_AUC and len(np.unique(y)) == 2
-    return {"n": n, "logged": len(rows), "pendientes": pending, "descartadas": discarded,
+    selective = train.selective_accuracy(y, p).astype(object)
+    selective = selective.where(pd.notna(selective), None).to_dict("records")
+    return {"n": n, "logged": len(rows) + other_model, "pendientes": pending, "descartadas": discarded,
             "otro_modelo": other_model, "accuracy": float(accuracy_score(y, p >= 0.5)) if n else None,
-            "auc": float(roc_auc_score(y, p)) if both else None}
+            "auc": float(roc_auc_score(y, p)) if both else None,
+            "log_loss": float(log_loss(y, p, labels=[0, 1])) if n else None,
+            "selectiva": selective,
+            "abstenciones": int((np.maximum(p, 1 - p) < ABSTAIN_BELOW).sum())}
 
 
 # --- Development set, freeze and forward test ------------------------------------------------
@@ -674,9 +905,27 @@ def evaluate_new_command(export_dir: Path = build.EXPORT_DIR, models_dir: Path =
     return r
 
 
+def _backup_model(path, bundle):
+    try:
+        date = datetime.fromisoformat(bundle["trained_at"]).date().isoformat()
+    except (KeyError, ValueError, TypeError):
+        raise PredictError("El modelo actual no tiene una fecha de ajuste válida; no se sobrescribe.")
+    backup = path.with_name(f"modelo_final_{date}.joblib")
+    digest = hashlib.sha256(path.read_bytes()).digest()
+    if backup.exists():
+        if hashlib.sha256(backup.read_bytes()).digest() != digest:
+            raise PredictError("La copia fechada ya existe con otro contenido; no se sobrescribe.")
+    else:
+        with backup.open("xb") as f:
+            f.write(path.read_bytes())
+    if hashlib.sha256(backup.read_bytes()).digest() != digest:
+        raise PredictError("La copia fechada no coincide en sha256; no se continúa.")
+    return backup
+
+
 def train_command(export_dir: Path = build.EXPORT_DIR, models_dir: Path = MODELS_DIR, force: bool = False,
                   out=print) -> dict:
-    """Refit on every usable match with a pool from all of them; saves only modelo_final.joblib."""
+    """Reajusta con todas las partidas tras guardar y verificar una copia fechada del modelo actual."""
     export_dir, models_dir = Path(export_dir), Path(models_dir)
     if not _read_test_runs(models_dir):
         if not force:
@@ -684,6 +933,15 @@ def train_command(export_dir: Path = build.EXPORT_DIR, models_dir: Path = MODELS
                                "--evaluate-new; reentrenar antes contaminaría la prueba. (--force lo omite.)")
         out("ADVERTENCIA: --force sin resultado de la prueba. Reentrenar con todas las partidas CONTAMINA la prueba "
             "independiente: este modelo ya no se podrá evaluar con las partidas usadas.")
+    current_path = models_dir / "modelo_final.joblib"
+    current = load_model(current_path) if current_path.exists() else None
+    second = _second_test(current, models_dir) if current else None
+    if current and not second:
+        if not force:
+            raise PredictError("El modelo actual no tiene segunda prueba registrada; ejecuta --evaluate-final antes de --train (o --force).")
+        out("ADVERTENCIA: --force sin segunda prueba del modelo actual; el reajuste no tiene prueba independiente.")
+    if current:
+        _backup_model(current_path, current)
     try:
         matches, history = _read_export(export_dir)
         done = matches.loc[matches["status"] == "history_done", "match_id"].astype(str)
@@ -694,6 +952,13 @@ def train_command(export_dir: Path = build.EXPORT_DIR, models_dir: Path = MODELS
     candidate_path = models_dir / CANDIDATE_NAME
     development = load_model(candidate_path)["development_ids"] if candidate_path.exists() else []
     bundle = fit_final_model(table, pool, shares, development_ids=development)
+    if second:
+        bundle["modelo_probado"] = {"trained_at": current["trained_at"], "n_matches": current["n_matches"],
+                                    "fecha": second["fecha"], "n": second["n"],
+                                    **{k: second["modelos"]["final"][k] for k in ("accuracy", "auc", "log_loss")},
+                                    "selectiva": second.get("selectiva", {}).get("final", [])}
+    elif current and current.get("modelo_probado"):
+        bundle["modelo_probado"] = current["modelo_probado"]
     path = save_model(bundle, models_dir / "modelo_final.joblib")
     low, high = bundle["auc_ic95"]
     out(f"Modelo guardado en {path}")
@@ -705,7 +970,15 @@ def train_command(export_dir: Path = build.EXPORT_DIR, models_dir: Path = MODELS
 # --- Commands -----------------------------------------------------------------------------
 
 
-def _weak_signal_warning(bundle: dict, models_dir: Path = MODELS_DIR) -> str:
+def _weak_signal_warning(bundle: dict, models_dir: Path | None = None) -> str:
+    models_dir = Path(models_dir or MODELS_DIR)
+    if bundle.get("modelo_probado"):
+        tested = bundle["modelo_probado"]
+        auc = "no calculable" if tested["auc"] is None else f"{tested['auc']:.4f}"
+        return (f"Aviso: señal débil. La versión anterior ({tested['n_matches']} partidas) pasó la segunda prueba "
+                f"({tested['fecha'][:10]}, n = {tested['n']}): accuracy {_percent(tested['accuracy'])}, "
+                f"ROC AUC {auc}, pérdida logarítmica {tested['log_loss']:.4f}. "
+                f"Este reajuste con {bundle['n_matches']} partidas no tiene prueba independiente propia.")
     low, high = bundle["auc_ic95"]
     text = ("Aviso: es una señal débil. En validación temporal el modelo tiene ROC AUC "
             f"{bundle['auc_temporal']:.3f} (IC 95 %: {low:.3f} a {high:.3f}); 0.5 equivale a adivinar. "
@@ -749,7 +1022,7 @@ def _predict_command(match_id: str) -> None:
     print("Descargando la partida y el historial de los 10 jugadores (puede tardar un par de minutos)...")
     try:
         result = predict_match(match_id, bundle)
-    except (ValueError, requests.HTTPError, RiotUnavailableError) as error:
+    except (ValueError, requests.RequestException, RiotUnavailableError) as error:
         raise SystemExit(f"No se pudo predecir {match_id}: "
                          f"{error if isinstance(error, ValueError) else _safe_error(error)}")
     real = "azul" if result["blue_win"] else "rojo"
@@ -757,6 +1030,7 @@ def _predict_command(match_id: str) -> None:
         print("ADVERTENCIA: el modelo se ajustó con esta partida. La probabilidad es dentro de la muestra "
               "y NO es una predicción real: el ROC AUC de abajo no la describe.")
     print(f"Probabilidad de que gane el equipo azul: {result['prob_blue']:.1%}")
+    print(_confidence_line(result["prob_blue"], bundle))
     print(f"Resultado real: ganó el equipo {real}")
     print(f"Jugadores sin historial: {result['jugadores_sin_historial']}")
     print(_weak_signal_warning(bundle))
@@ -770,18 +1044,23 @@ def _live_command(riot_id: str) -> None:
         result = predict_live(riot_id, bundle)
     except LiveError as error:
         raise SystemExit(str(error))
-    except (requests.HTTPError, RiotUnavailableError) as error:
+    except (requests.RequestException, RiotUnavailableError) as error:
         raise SystemExit(f"No se pudo predecir la partida en vivo: {_safe_error(error)}")
+    _print_live_result(result, bundle)
+
+
+def _print_live_result(result, bundle, out=print):
     for team_id, label in ((100, "Equipo azul"), (200, "Equipo rojo")):
-        print(f"{label}:")
+        out(f"{label}:")
         for position, champion in result["teams"].get(team_id, []):
-            print(f"  {position:<8} {champion}")
-    print(f"Probabilidad de que gane el equipo azul: {result['prob_blue']:.1%}")
-    print(f"Probabilidad de que gane el equipo rojo: {result['prob_red']:.1%}")
-    print(f"Jugadores sin historial: {result['jugadores_sin_historial']}")
-    print("Posiciones inferidas (hechizos + campeón + partidas anteriores); no son las de Riot.")
-    print(_weak_signal_warning(bundle))
-    print("Guardada en data/predictions/live_log.csv." if result["logged"]
+            out(f"  {position:<8} {champion}")
+    out(f"Probabilidad de que gane el equipo azul: {result['prob_blue']:.1%}")
+    out(f"Probabilidad de que gane el equipo rojo: {result['prob_red']:.1%}")
+    out(_confidence_line(result["prob_blue"], bundle))
+    out(f"Jugadores sin historial: {result['jugadores_sin_historial']}")
+    out("Posiciones inferidas (hechizos + campeón + partidas anteriores); no son las de Riot.")
+    out(_weak_signal_warning(bundle))
+    out("Guardada en data/predictions/live_log.csv." if result["logged"]
           else "Esta partida ya estaba en el registro: no se añadió otra fila.")
 
 
@@ -790,16 +1069,24 @@ def _score_log_command() -> None:
     bundle = _load_checked()
     try:
         r = score_log(bundle=bundle)
-    except (requests.HTTPError, RiotUnavailableError) as error:
+    except (requests.RequestException, RiotUnavailableError) as error:
         raise SystemExit(f"No se pudo comprobar el registro: {_safe_error(error)}")
     print(f"Modelo evaluado: entrenado el {bundle.get('trained_at', '?')}; "
           f"filas de otros modelos (no evaluadas): {r['otro_modelo']}")
     print(f"Partidas registradas (de este modelo): {r['logged'] - r['otro_modelo']}; terminadas y evaluadas: {r['n']}; "
           f"sin terminar: {r['pendientes']}; descartadas (remake): {r['descartadas']}")
     if r["n"] == 0:
+        print("AVISO: muestra demasiado pequeña para concluir (menos de 20 partidas).")
         print("Todavía no hay partidas terminadas que evaluar.")
         return
-    print(f"n = {r['n']}, accuracy = {r['accuracy']:.1%}")
+    print(f"n = {r['n']}, accuracy = {r['accuracy']:.1%}; pérdida logarítmica = {r['log_loss']:.4f}")
+    print(f"Abstenciones con umbral 55 %: {r['abstenciones']}")
+    if r["n"] < 20:
+        print("AVISO: muestra demasiado pequeña para concluir (menos de 20 partidas).")
+    for row in r["selectiva"]:
+        accuracy = ("sin partidas" if row["accuracy"] is None else
+                    f"aciertos {_percent(row['accuracy'])}, IC de Wilson 95 %: {_percent(row['lo'])} a {_percent(row['hi'])}")
+        print(f"Confianza >= {_percent(row['threshold'])}: n = {row['n']}, cobertura {_percent(row['coverage'])}; {accuracy}")
     if r["auc"] is None:
         print(f"Muy pocas partidas para calcular el ROC AUC (hacen falta al menos {MIN_FINISHED_FOR_AUC} y ambas clases).")
     else:
@@ -836,17 +1123,29 @@ def main():
                         help="test the frozen candidate against the base on matches outside the development set")
     parser.add_argument("--evaluate-final", action="store_true", help="segunda prueba del modelo final sin reentrenar")
     parser.add_argument("--train", action="store_true",
-                        help="refit on every usable match and save modelo_final (after the test)")
-    parser.add_argument("--force", action="store_true", help="with --train: skip the test-result check (contaminates the test)")
+                        help="reajustar tras ambas pruebas; conserva una copia con fecha del modelo actual")
+    parser.add_argument("--force", action="store_true", help="con --train: omitir comprobaciones de ambas pruebas (contamina la prueba)")
     parser.add_argument("--live", metavar="NAME#TAG", help="predict the game this player is in now")
     parser.add_argument("--score-log", action="store_true", help="compare logged live predictions with results")
+    parser.add_argument("--watch", action="store_true", help="vigilar semillas locales; no ejecutar con la recolección en marcha (un solo limitador por proceso)")
+    parser.add_argument("--watch-minutes", type=float, default=60, help="duración de vigilancia en minutos (60)")
+    parser.add_argument("--max-games", type=int, default=20, help="máximo de partidas nuevas (20)")
     args = parser.parse_args()
+    if args.watch and any((args.freeze, args.train, args.live, args.score_log, args.evaluate_new, args.evaluate_final, args.match_id)):
+        parser.error("--watch debe ejecutarse solo")
+    if args.watch and (args.watch_minutes <= 0 or args.max_games <= 0):
+        parser.error("Los minutos y el máximo de partidas deben ser positivos")
     if args.evaluate_final and any((args.freeze, args.train, args.live, args.score_log, args.evaluate_new, args.match_id)):
         parser.error("--evaluate-final debe ejecutarse solo; no puede combinarse con entrenamiento ni otros comandos")
     if args.freeze:
         _freeze_command()
     elif args.train:
         _guarded(train_command, force=args.force)
+    elif args.watch:
+        try:
+            _guarded(watch, _load_checked(), watch_minutes=args.watch_minutes, max_games=args.max_games)
+        except sqlite3.Error:
+            raise SystemExit("No se pudo leer la base local de semillas en modo solo lectura.")
     elif args.live:
         _live_command(args.live)
     elif args.score_log:
