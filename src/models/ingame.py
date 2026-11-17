@@ -42,7 +42,10 @@ def train(rows):
             "trained_at": datetime.now(timezone.utc).isoformat(), "recipe": "StandardScaler + LogisticRegression(C=1.0)"}
 
 
-def load_bundle(path=MODEL_PATH):
+def load_bundle(path=None):
+    if path is None:
+        local = ROOT / MODEL_PATH
+        path = local if local.is_file() else ROOT / "demo/modelos_en_partida.joblib"
     path = Path(path)
     if not path.is_absolute():
         path = ROOT / path

@@ -1,0 +1,2916 @@
+[
+  {
+    "etiqueta": "Partida 1",
+    "gana_azul": false,
+    "prob_previa": 0.364584561074755,
+    "campeones": {
+      "azul": [
+        "Darius",
+        "Evelynn",
+        "Briar",
+        "Miss Fortune",
+        "Nunu & Willump"
+      ],
+      "rojo": [
+        "Urgot",
+        "Nidalee",
+        "Malzahar",
+        "Kai'Sa",
+        "Lux"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.364584561074755
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.43895627549201516
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.5537054399740364
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.400835372626121
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.30891154113707425
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.2961401264626498
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.24048638016365995
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.26029588655470703
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.2885546223368702
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.24756358513089907
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.32621782064365246
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.09864982277606653
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.20832393256260842
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.15993896970990626
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.13219696540566495
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.17668173323952635
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.198205620429898
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.21859053930115024
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.20374861319486778
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.1262520818499286
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.12075742037021256
+      },
+      {
+        "minuto": 21,
+        "prob_azul": 0.05954435197640581
+      },
+      {
+        "minuto": 22,
+        "prob_azul": 0.0804349942162106
+      },
+      {
+        "minuto": 23,
+        "prob_azul": 0.11358543083994804
+      },
+      {
+        "minuto": 24,
+        "prob_azul": 0.09978208856489551
+      },
+      {
+        "minuto": 25,
+        "prob_azul": 0.12052733723057633
+      },
+      {
+        "minuto": 26,
+        "prob_azul": 0.17391449901645653
+      },
+      {
+        "minuto": 27,
+        "prob_azul": 0.21668566268771047
+      },
+      {
+        "minuto": 28,
+        "prob_azul": 0.191595486669397
+      },
+      {
+        "minuto": 29,
+        "prob_azul": 0.06771864012963771
+      },
+      {
+        "minuto": 30,
+        "prob_azul": 0.049046891549760635
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 10.268333333333333,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 10.828483333333333,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 12.891283333333334,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 15.477283333333334,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 16.028566666666666,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.541316666666667,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 20.027066666666666,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 20.265583333333332,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 20.487216666666665,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 21.85033333333333,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 21.99735,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 22.369983333333334,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 24.932766666666666,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.03665,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 28.931166666666666,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 29.023833333333332,
+        "tipo": "torre",
+        "equipo": "rojo"
+      }
+    ]
+  },
+  {
+    "etiqueta": "Partida 2",
+    "gana_azul": true,
+    "prob_previa": 0.6810929072759895,
+    "campeones": {
+      "azul": [
+        "Darius",
+        "Evelynn",
+        "Galio",
+        "Samira",
+        "Leona"
+      ],
+      "rojo": [
+        "Sett",
+        "Briar",
+        "Locke",
+        "Smolder",
+        "Milio"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.6810929072759895
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.5626308443493926
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.5463674091629067
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.6267638212468133
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.7067003947704925
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.6815080375732506
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.7247997925867032
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.6480268245449194
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.6277572776227228
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.6851254979753518
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.5813320733626643
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.6860085442799546
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.6530820539493855
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.5725206656644977
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.6719415036418954
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.7145596562430678
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.7162602855350119
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.8175408080682259
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.9984156175205509
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.9985810286756881
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.9999845615110246
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 11.393566666666667,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 11.697733333333334,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 12.134516666666666,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 14.314283333333334,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 16.7534,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 16.890633333333334,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 17.144816666666667,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 17.271366666666665,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 17.547183333333333,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.065716666666667,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.234416666666668,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.791783333333335,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.80515,
+        "tipo": "torre",
+        "equipo": "azul"
+      }
+    ]
+  },
+  {
+    "etiqueta": "Partida 3",
+    "gana_azul": false,
+    "prob_previa": 0.38995683976797163,
+    "campeones": {
+      "azul": [
+        "Trundle",
+        "Locke",
+        "Fizz",
+        "Twitch",
+        "Karma"
+      ],
+      "rojo": [
+        "Jax",
+        "Xin Zhao",
+        "Sylas",
+        "Mel",
+        "Leona"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.38995683976797163
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.4899124057065247
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.5245847136122196
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.5168646353808092
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.4994561090539405
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.3067899432374445
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.4187117075910691
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.14271705771109616
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.24117474735779718
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.20412951965887244
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.17608354334289106
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.19086052412256738
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.2115792197052503
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.10990061614541513
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.03992554763751096
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.04136396666900044
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.02459722340329157
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.03765668048796681
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.04779571801826011
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.030992021620492315
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.08716649439379863
+      },
+      {
+        "minuto": 21,
+        "prob_azul": 0.06162057937675059
+      },
+      {
+        "minuto": 22,
+        "prob_azul": 0.04858731625580853
+      },
+      {
+        "minuto": 23,
+        "prob_azul": 0.08276497952704386
+      },
+      {
+        "minuto": 24,
+        "prob_azul": 0.1806507086253637
+      },
+      {
+        "minuto": 25,
+        "prob_azul": 0.10967892810870776
+      },
+      {
+        "minuto": 26,
+        "prob_azul": 0.1424583859705889
+      },
+      {
+        "minuto": 27,
+        "prob_azul": 0.12207415084465302
+      },
+      {
+        "minuto": 28,
+        "prob_azul": 0.109909145850639
+      },
+      {
+        "minuto": 29,
+        "prob_azul": 0.05578761990522151
+      },
+      {
+        "minuto": 30,
+        "prob_azul": 0.06533631028842637
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 7.00165,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 12.713516666666667,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 12.820416666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 13.14225,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 13.472,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 15.53035,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 16.603116666666665,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 17.394983333333332,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 18.0596,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 18.351916666666668,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 21.035566666666668,
+        "tipo": "barón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 23.508516666666665,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 24.294116666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.45645,
+        "tipo": "barón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 28.875116666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 28.922983333333335,
+        "tipo": "torre",
+        "equipo": "rojo"
+      }
+    ]
+  },
+  {
+    "etiqueta": "Partida 4",
+    "gana_azul": true,
+    "prob_previa": 0.625224604169825,
+    "campeones": {
+      "azul": [
+        "Sett",
+        "Warwick",
+        "Gwen",
+        "Lucian",
+        "Nautilus"
+      ],
+      "rojo": [
+        "Tryndamere",
+        "Graves",
+        "Yone",
+        "Jhin",
+        "Lux"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.625224604169825
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.47611723152711094
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.3976729671474393
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.37184540499736707
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.5435292203994972
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.3974623464303358
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.507204083636253
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.4761004529679865
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.28798385385844616
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.4370230010075516
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.31429213900000635
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.46942891311423757
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.35915160193806267
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.2801647348498048
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.33227959055648354
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.2904009567076392
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.278953597747256
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.2591934590185949
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.5707192795794801
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.5998166631103613
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.3008278586282854
+      },
+      {
+        "minuto": 21,
+        "prob_azul": 0.24343909668227784
+      },
+      {
+        "minuto": 22,
+        "prob_azul": 0.36437809600359383
+      },
+      {
+        "minuto": 23,
+        "prob_azul": 0.2552560130437153
+      },
+      {
+        "minuto": 24,
+        "prob_azul": 0.372283976671639
+      },
+      {
+        "minuto": 25,
+        "prob_azul": 0.6596879006507753
+      },
+      {
+        "minuto": 26,
+        "prob_azul": 0.7769594580013753
+      },
+      {
+        "minuto": 27,
+        "prob_azul": 0.7616020313677024
+      },
+      {
+        "minuto": 28,
+        "prob_azul": 0.7544698450004184
+      },
+      {
+        "minuto": 29,
+        "prob_azul": 0.7155585450556389
+      },
+      {
+        "minuto": 30,
+        "prob_azul": 0.8243218094648064
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 7.5835333333333335,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 13.087866666666667,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 16.43565,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 16.75635,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 17.34185,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 17.82593333333333,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 18.376066666666667,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.30065,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 24.37325,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 24.7415,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 25.145383333333335,
+        "tipo": "barón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 26.086616666666668,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.433,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 28.22355,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 28.646116666666668,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 29.44236666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 29.495266666666666,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 30.079533333333334,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 30.86345,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 30.95085,
+        "tipo": "torre",
+        "equipo": "azul"
+      }
+    ]
+  },
+  {
+    "etiqueta": "Partida 5",
+    "gana_azul": false,
+    "prob_previa": 0.662538708498387,
+    "campeones": {
+      "azul": [
+        "Yorick",
+        "Lee Sin",
+        "Akali",
+        "Tristana",
+        "Morgana"
+      ],
+      "rojo": [
+        "Volibear",
+        "Mordekaiser",
+        "Aurora",
+        "Ashe",
+        "Nunu & Willump"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.662538708498387
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.485588800933151
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.39441701749939717
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.34923744363598525
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.34706282918269854
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.20336787713630905
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.16697095078194138
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.18776862362720442
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.21760308986993934
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.3310481940102367
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.22607044158725054
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.13066936206521487
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.19444108315265557
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.25080455151776565
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.3080224017782021
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.37469444029011356
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.40695438339893875
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.29513346720570244
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.3538674282898572
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.41548975891821655
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.6298434731923296
+      },
+      {
+        "minuto": 21,
+        "prob_azul": 0.5871176573953999
+      },
+      {
+        "minuto": 22,
+        "prob_azul": 0.7162289723249341
+      },
+      {
+        "minuto": 23,
+        "prob_azul": 0.62579907214264
+      },
+      {
+        "minuto": 24,
+        "prob_azul": 0.5535834778310698
+      },
+      {
+        "minuto": 25,
+        "prob_azul": 0.6270167764994357
+      },
+      {
+        "minuto": 26,
+        "prob_azul": 0.6211651063162932
+      },
+      {
+        "minuto": 27,
+        "prob_azul": 0.5538535230817891
+      },
+      {
+        "minuto": 28,
+        "prob_azul": 0.4787300891094358
+      },
+      {
+        "minuto": 29,
+        "prob_azul": 0.47066573739491896
+      },
+      {
+        "minuto": 30,
+        "prob_azul": 0.39335614720463535
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 9.601116666666666,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 10.232583333333332,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 16.179333333333332,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 16.87345,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 19.341616666666667,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.8382,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 21.580066666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 21.62555,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 21.6662,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 22.07715,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 25.10875,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 25.114866666666668,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 27.12555,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.61785,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 30.24876666666667,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 31.19245,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 31.302133333333334,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.4237,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 35.01861666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 36.46561666666667,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 37.250733333333336,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 37.41498333333333,
+        "tipo": "torre",
+        "equipo": "rojo"
+      }
+    ]
+  },
+  {
+    "etiqueta": "Partida 6",
+    "gana_azul": true,
+    "prob_previa": 0.36128264775452495,
+    "campeones": {
+      "azul": [
+        "Renekton",
+        "Sylas",
+        "Orianna",
+        "Lucian",
+        "Milio"
+      ],
+      "rojo": [
+        "Garen",
+        "Nidalee",
+        "Yasuo",
+        "Xayah",
+        "Nami"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.36128264775452495
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.4644110848104999
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.58581169427035
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.6797465734164936
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.5482745649264348
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.5682935027436553
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.5826268453779654
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.5250005733555518
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.5369014975457901
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.433034575992352
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.40766620032096174
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.5849677232989489
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.572626712168086
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.5415632235591108
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.3928921579874367
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.31582905273683826
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.4011741384437842
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.20128044222359967
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.06269006772581746
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.09242786277319555
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.1467235363538524
+      },
+      {
+        "minuto": 21,
+        "prob_azul": 0.1419047228780096
+      },
+      {
+        "minuto": 22,
+        "prob_azul": 0.1341205700773649
+      },
+      {
+        "minuto": 23,
+        "prob_azul": 0.26764672438900744
+      },
+      {
+        "minuto": 24,
+        "prob_azul": 0.46085585029617465
+      },
+      {
+        "minuto": 25,
+        "prob_azul": 0.5969817984303126
+      },
+      {
+        "minuto": 26,
+        "prob_azul": 0.6396282058662269
+      },
+      {
+        "minuto": 27,
+        "prob_azul": 0.5578731569251129
+      },
+      {
+        "minuto": 28,
+        "prob_azul": 0.5722026885592358
+      },
+      {
+        "minuto": 29,
+        "prob_azul": 0.4813353346071257
+      },
+      {
+        "minuto": 30,
+        "prob_azul": 0.4238228049512894
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 6.677616666666666,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 12.012583333333334,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 14.68455,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 15.879483333333333,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 16.2508,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 16.686116666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 17.908266666666666,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 19.710066666666666,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.798566666666666,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 20.738216666666666,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 24.2197,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 24.45515,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 25.588083333333334,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 29.384266666666665,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 30.628983333333334,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 31.444566666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 31.6962,
+        "tipo": "barón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 33.320883333333335,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 33.554383333333334,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 33.8956,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 33.95738333333333,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.2564,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 36.414766666666665,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 37.14001666666667,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 37.531166666666664,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 37.682066666666664,
+        "tipo": "torre",
+        "equipo": "azul"
+      }
+    ]
+  },
+  {
+    "etiqueta": "Partida 7",
+    "gana_azul": false,
+    "prob_previa": 0.6153420841507163,
+    "campeones": {
+      "azul": [
+        "Sion",
+        "Vi",
+        "Irelia",
+        "Kai'Sa",
+        "Mel"
+      ],
+      "rojo": [
+        "Kayle",
+        "Shyvana",
+        "Caitlyn",
+        "Vayne",
+        "Braum"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.6153420841507163
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.5004286765937064
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.48802508546102363
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.44421094793819005
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.5724987565430201
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.5566321959511668
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.608062162716888
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.3902912096586494
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.39308934529802453
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.48455670252045974
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.5134646543976289
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.47604465304228427
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.5269001575344597
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.4498892107780654
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.3831458506319606
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.4008740376876835
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.5145486524818795
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.5365195486207296
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.42689426539084896
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.3393598010008508
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.3388510974463461
+      },
+      {
+        "minuto": 21,
+        "prob_azul": 0.31039738870504957
+      },
+      {
+        "minuto": 22,
+        "prob_azul": 0.23089414160760532
+      },
+      {
+        "minuto": 23,
+        "prob_azul": 0.32832428737717784
+      },
+      {
+        "minuto": 24,
+        "prob_azul": 0.44560638006724207
+      },
+      {
+        "minuto": 25,
+        "prob_azul": 0.37020466930229856
+      },
+      {
+        "minuto": 26,
+        "prob_azul": 0.36855676590934633
+      },
+      {
+        "minuto": 27,
+        "prob_azul": 0.3832404912046499
+      },
+      {
+        "minuto": 28,
+        "prob_azul": 0.3706768725393286
+      },
+      {
+        "minuto": 29,
+        "prob_azul": 0.13020212433221312
+      },
+      {
+        "minuto": 30,
+        "prob_azul": 0.09160319712092384
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 6.194333333333334,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 11.957533333333334,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 16.757583333333333,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 17.724266666666665,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 18.889483333333335,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 18.925116666666668,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.412933333333335,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 21.190416666666668,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 21.675016666666668,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 23.496266666666667,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 24.778,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 28.207733333333334,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 28.74135,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 29.00725,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 30.093183333333332,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 30.388683333333333,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 30.54175,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 33.137683333333335,
+        "tipo": "barón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.5362,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.60691666666666,
+        "tipo": "torre",
+        "equipo": "rojo"
+      }
+    ]
+  },
+  {
+    "etiqueta": "Partida 8",
+    "gana_azul": false,
+    "prob_previa": 0.48281052319719886,
+    "campeones": {
+      "azul": [
+        "Gwen",
+        "Vi",
+        "Yasuo",
+        "Lucian",
+        "LeBlanc"
+      ],
+      "rojo": [
+        "Riven",
+        "Shaco",
+        "Vladimir",
+        "Mel",
+        "Karma"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.48281052319719886
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.47611723152711094
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.5216086327618557
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.5600649359094405
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.4894845039342406
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.49128795827118776
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.5308499616052464
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.6341350469217539
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.5329256275739975
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.4860077831416855
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.640976833326165
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.5793043736114503
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.7162074265525823
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.768775637296386
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.7017817217325895
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.8310652916091575
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.7979562011688084
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.7930888122937513
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.7713821947051293
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.776679925236833
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.8379667934538323
+      },
+      {
+        "minuto": 21,
+        "prob_azul": 0.8188338930837077
+      },
+      {
+        "minuto": 22,
+        "prob_azul": 0.8315037008203396
+      },
+      {
+        "minuto": 23,
+        "prob_azul": 0.8135893057803997
+      },
+      {
+        "minuto": 24,
+        "prob_azul": 0.8809969694965109
+      },
+      {
+        "minuto": 25,
+        "prob_azul": 0.6927767230940844
+      },
+      {
+        "minuto": 26,
+        "prob_azul": 0.46961563855638777
+      },
+      {
+        "minuto": 27,
+        "prob_azul": 0.49786137371874306
+      },
+      {
+        "minuto": 28,
+        "prob_azul": 0.4660585143798607
+      },
+      {
+        "minuto": 29,
+        "prob_azul": 0.5281166633454007
+      },
+      {
+        "minuto": 30,
+        "prob_azul": 0.6850712302067178
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 8.6735,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 14.018366666666667,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 15.203383333333333,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 17.041116666666667,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 18.69525,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.1603,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.296983333333333,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 23.306916666666666,
+        "tipo": "barón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 23.363716666666665,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 24.757283333333334,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 25.0028,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 25.484933333333334,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 26.44195,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.18685,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 28.20255,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 29.87965,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 30.3681,
+        "tipo": "barón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 31.16975,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 31.564266666666665,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 31.639466666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      }
+    ]
+  },
+  {
+    "etiqueta": "Partida 9",
+    "gana_azul": false,
+    "prob_previa": 0.4433557501552528,
+    "campeones": {
+      "azul": [
+        "Tryndamere",
+        "Shyvana",
+        "Zed",
+        "Varus",
+        "Jinx"
+      ],
+      "rojo": [
+        "Garen",
+        "Wukong",
+        "Ryze",
+        "Miss Fortune",
+        "Seraphine"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.4433557501552528
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.47611723152711094
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.5980102343763185
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.7199031501319282
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.7377710478790582
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.7370319446800365
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.7732824039372092
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.7307366743654116
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.7028511041036084
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.7861644360923036
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.7793659240308466
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.6733571086821314
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.7050402396481887
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.7055470142622569
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.7801257631591877
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.6257387568476277
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.617546709697752
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.6680932116089673
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.7565150883056305
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.7198034372245645
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.99350290580271
+      },
+      {
+        "minuto": 21,
+        "prob_azul": 0.8989373979819842
+      },
+      {
+        "minuto": 22,
+        "prob_azul": 0.8856306606561871
+      },
+      {
+        "minuto": 23,
+        "prob_azul": 0.8313938026506487
+      },
+      {
+        "minuto": 24,
+        "prob_azul": 0.7583234145882681
+      },
+      {
+        "minuto": 25,
+        "prob_azul": 0.6684037547591469
+      },
+      {
+        "minuto": 26,
+        "prob_azul": 0.5994891175264845
+      },
+      {
+        "minuto": 27,
+        "prob_azul": 0.4163084428690058
+      },
+      {
+        "minuto": 28,
+        "prob_azul": 0.4468635191307713
+      },
+      {
+        "minuto": 29,
+        "prob_azul": 0.5123047451471017
+      },
+      {
+        "minuto": 30,
+        "prob_azul": 0.6450688314233785
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 8.810533333333334,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 11.869416666666666,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 12.87025,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 13.75055,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 14.46305,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 16.365233333333332,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 17.4191,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 19.597666666666665,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 21.016283333333334,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 21.34185,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 21.647083333333335,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 23.672883333333335,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 26.317416666666666,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 26.468916666666665,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.4553,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.899466666666665,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 29.6199,
+        "tipo": "barón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 29.867233333333335,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 29.90185,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 30.264616666666665,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 32.80876666666666,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.75411666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.7775,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.79643333333333,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.99968333333333,
+        "tipo": "torre",
+        "equipo": "rojo"
+      }
+    ]
+  },
+  {
+    "etiqueta": "Partida 10",
+    "gana_azul": false,
+    "prob_previa": 0.34111181708224825,
+    "campeones": {
+      "azul": [
+        "Renekton",
+        "Jarvan IV",
+        "Aurora",
+        "Jhin",
+        "Soraka"
+      ],
+      "rojo": [
+        "Tryndamere",
+        "Rengar",
+        "Galio",
+        "Ziggs",
+        "Karma"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.34111181708224825
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.46255601255430595
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.5037430260961977
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.3257805862228894
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.5055247069006668
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.5840350060292453
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.4674319156482599
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.4005052663601754
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.5333382400079286
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.40841725264855794
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.4230604589077654
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.4716220027934995
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.431037688481815
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.2729733710512611
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.28860990642919265
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.28353461745848696
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.2789179771704379
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.3627511221477871
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.3362345112971105
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.1714784778703225
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.17984437933909725
+      },
+      {
+        "minuto": 21,
+        "prob_azul": 0.20071739053295345
+      },
+      {
+        "minuto": 22,
+        "prob_azul": 0.20160151081393157
+      },
+      {
+        "minuto": 23,
+        "prob_azul": 0.06907790757043338
+      },
+      {
+        "minuto": 24,
+        "prob_azul": 0.07618967546752584
+      },
+      {
+        "minuto": 25,
+        "prob_azul": 0.040192102778124864
+      },
+      {
+        "minuto": 26,
+        "prob_azul": 0.04343406112418596
+      },
+      {
+        "minuto": 27,
+        "prob_azul": 0.09496481225437338
+      },
+      {
+        "minuto": 28,
+        "prob_azul": 0.08117262418348346
+      },
+      {
+        "minuto": 29,
+        "prob_azul": 0.12390125990082336
+      },
+      {
+        "minuto": 30,
+        "prob_azul": 0.16187577115413207
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 5.6025833333333335,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 12.251666666666667,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 13.324683333333333,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 13.7006,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 16.190183333333334,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 17.96035,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 18.66755,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 18.84176666666667,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 22.906016666666666,
+        "tipo": "barón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 23.38505,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 23.800116666666668,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 24.746816666666668,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 25.842166666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 26.097683333333332,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 31.395983333333334,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 31.81985,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 31.862166666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      }
+    ]
+  },
+  {
+    "etiqueta": "Partida 11",
+    "gana_azul": false,
+    "prob_previa": 0.6155170943434884,
+    "campeones": {
+      "azul": [
+        "Mordekaiser",
+        "Viego",
+        "Veigar",
+        "Yunara",
+        "Pantheon"
+      ],
+      "rojo": [
+        "Tristana",
+        "Sylas",
+        "Akali",
+        "Smolder",
+        "Alistar"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.6155170943434884
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.47508781365825176
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.46896714371658893
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.4993276105002153
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.5583704212728917
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.538942650551702
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.504665052076061
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.5189489508367743
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.6855207566850499
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.5758207326611916
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.6277748781788703
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.4920834187681388
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.3352685639999641
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.32035594464463657
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.29392690186149295
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.4045630791711239
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.40961138090615706
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.44470324515051596
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.5274184943472158
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.5504814836221663
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.6431368469603324
+      },
+      {
+        "minuto": 21,
+        "prob_azul": 0.6599228912910177
+      },
+      {
+        "minuto": 22,
+        "prob_azul": 0.7858809792704801
+      },
+      {
+        "minuto": 23,
+        "prob_azul": 0.6209861085325608
+      },
+      {
+        "minuto": 24,
+        "prob_azul": 0.6207694234173636
+      },
+      {
+        "minuto": 25,
+        "prob_azul": 0.635893310838593
+      },
+      {
+        "minuto": 26,
+        "prob_azul": 0.6482616037613909
+      },
+      {
+        "minuto": 27,
+        "prob_azul": 0.5269367501966398
+      },
+      {
+        "minuto": 28,
+        "prob_azul": 0.39685007843348136
+      },
+      {
+        "minuto": 29,
+        "prob_azul": 0.2836641221599946
+      },
+      {
+        "minuto": 30,
+        "prob_azul": 0.24858466439071425
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 5.548733333333334,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 11.813916666666668,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 14.54525,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 17.069116666666666,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 17.513066666666667,
+        "tipo": "dragón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 22.41975,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 22.967066666666668,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 23.544916666666666,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 23.544916666666666,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 24.199366666666666,
+        "tipo": "torre",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 24.2478,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.0729,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 28.3805,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 32.51015,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 34.3648,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 35.9678,
+        "tipo": "barón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 39.7691,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 41.01658333333334,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 41.22603333333333,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 42.574866666666665,
+        "tipo": "barón",
+        "equipo": "azul"
+      },
+      {
+        "minuto": 47.42486666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 48.57171666666667,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 48.7997,
+        "tipo": "torre",
+        "equipo": "azul"
+      }
+    ]
+  },
+  {
+    "etiqueta": "Partida 12",
+    "gana_azul": false,
+    "prob_previa": 0.4783443443376318,
+    "campeones": {
+      "azul": [
+        "Zoe",
+        "Master Yi",
+        "Orianna",
+        "Tristana",
+        "Tahm Kench"
+      ],
+      "rojo": [
+        "Ornn",
+        "Rammus",
+        "Akali",
+        "Kai'Sa",
+        "Poppy"
+      ]
+    },
+    "curva": [
+      {
+        "minuto": 0,
+        "prob_azul": 0.4783443443376318
+      },
+      {
+        "minuto": 1,
+        "prob_azul": 0.47508781365825176
+      },
+      {
+        "minuto": 2,
+        "prob_azul": 0.45290142682270196
+      },
+      {
+        "minuto": 3,
+        "prob_azul": 0.4546031049095846
+      },
+      {
+        "minuto": 4,
+        "prob_azul": 0.6864668898758423
+      },
+      {
+        "minuto": 5,
+        "prob_azul": 0.49899192571511597
+      },
+      {
+        "minuto": 6,
+        "prob_azul": 0.37982230242126086
+      },
+      {
+        "minuto": 7,
+        "prob_azul": 0.44427490586537066
+      },
+      {
+        "minuto": 8,
+        "prob_azul": 0.39545600661057284
+      },
+      {
+        "minuto": 9,
+        "prob_azul": 0.45951679484711444
+      },
+      {
+        "minuto": 10,
+        "prob_azul": 0.4502593015571402
+      },
+      {
+        "minuto": 11,
+        "prob_azul": 0.5139257864607762
+      },
+      {
+        "minuto": 12,
+        "prob_azul": 0.44221910819323357
+      },
+      {
+        "minuto": 13,
+        "prob_azul": 0.4781759787376754
+      },
+      {
+        "minuto": 14,
+        "prob_azul": 0.33657571665379815
+      },
+      {
+        "minuto": 15,
+        "prob_azul": 0.328011645504867
+      },
+      {
+        "minuto": 16,
+        "prob_azul": 0.27959616084538624
+      },
+      {
+        "minuto": 17,
+        "prob_azul": 0.22177383820824653
+      },
+      {
+        "minuto": 18,
+        "prob_azul": 0.16488045058204046
+      },
+      {
+        "minuto": 19,
+        "prob_azul": 0.16459473767940325
+      },
+      {
+        "minuto": 20,
+        "prob_azul": 0.07928931369336084
+      },
+      {
+        "minuto": 21,
+        "prob_azul": 0.05065828671142814
+      },
+      {
+        "minuto": 22,
+        "prob_azul": 0.022377373286218853
+      },
+      {
+        "minuto": 23,
+        "prob_azul": 0.012012853717949192
+      },
+      {
+        "minuto": 24,
+        "prob_azul": 0.01025445240273527
+      },
+      {
+        "minuto": 25,
+        "prob_azul": 0.004783105408203207
+      },
+      {
+        "minuto": 26,
+        "prob_azul": 0.004817359527279307
+      },
+      {
+        "minuto": 27,
+        "prob_azul": 0.004116586504053398
+      },
+      {
+        "minuto": 28,
+        "prob_azul": 0.001124831764159332
+      },
+      {
+        "minuto": 29,
+        "prob_azul": 0.0008556492228936575
+      }
+    ],
+    "eventos": [
+      {
+        "minuto": 8.262816666666666,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 13.999,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 19.359916666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 20.279166666666665,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 21.146216666666668,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 21.3234,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 21.488633333333333,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 21.838766666666668,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 22.497116666666667,
+        "tipo": "barón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 24.240283333333334,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 25.490983333333332,
+        "tipo": "dragón",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 26.5581,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 26.64335,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.034366666666667,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.709633333333333,
+        "tipo": "torre",
+        "equipo": "rojo"
+      },
+      {
+        "minuto": 27.770983333333334,
+        "tipo": "torre",
+        "equipo": "rojo"
+      }
+    ]
+  }
+]

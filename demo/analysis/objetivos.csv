@@ -1,0 +1,100 @@
+tipo,objetivo,etiqueta,lado,patron,estado,n,victorias,porcentaje_victoria,ic95_inferior,ic95_superior,n_referencia
+objetivo,atakhan,Primer Atakhan,total,,valido,507,398.0,78.50098619329388,74.71774625193451,81.85557899601473,180282
+objetivo,atakhan,Primer Atakhan,azul,,valido,255,198.0,77.6470588235294,72.14489922839532,82.32859997162046,180282
+objetivo,atakhan,Primer Atakhan,rojo,,valido,252,200.0,79.36507936507937,73.94577446813351,83.90255108559366,180282
+cobertura_objetivo,atakhan,Primer Atakhan,,,ausente,169103,,,,,180282
+cobertura_objetivo,atakhan,Primer Atakhan,,,first_ausente,0,,,,,180282
+cobertura_objetivo,atakhan,Primer Atakhan,,,first_invalido,0,,,,,180282
+cobertura_objetivo,atakhan,Primer Atakhan,,,sin_primero,10672,,,,,180282
+cobertura_objetivo,atakhan,Primer Atakhan,,,contradictorio,0,,,,,180282
+objetivo,baron,Primer barón,total,,valido,137665,109842.0,79.78934369665492,79.57638531903739,80.00063961331334,180282
+objetivo,baron,Primer barón,azul,,valido,66478,52609.0,79.13745900899546,78.82690400136802,79.44464677087679,180282
+objetivo,baron,Primer barón,rojo,,valido,71187,57233.0,80.3981063958307,80.10484778135005,80.68808444580183,180282
+cobertura_objetivo,baron,Primer barón,,,ausente,0,,,,,180282
+cobertura_objetivo,baron,Primer barón,,,first_ausente,0,,,,,180282
+cobertura_objetivo,baron,Primer barón,,,first_invalido,0,,,,,180282
+cobertura_objetivo,baron,Primer barón,,,sin_primero,42617,,,,,180282
+cobertura_objetivo,baron,Primer barón,,,contradictorio,0,,,,,180282
+objetivo,champion,Primera sangre,total,,valido,180130,101388.0,56.28601565536002,56.05681542960224,56.51494777524619,180282
+objetivo,champion,Primera sangre,azul,,valido,91026,50442.0,55.41493639180015,55.09181057566561,55.73760518736135,180282
+objetivo,champion,Primera sangre,rojo,,valido,89104,50946.0,57.17588435984917,56.850681543003546,57.500468468760225,180282
+cobertura_objetivo,champion,Primera sangre,,,ausente,0,,,,,180282
+cobertura_objetivo,champion,Primera sangre,,,first_ausente,0,,,,,180282
+cobertura_objetivo,champion,Primera sangre,,,first_invalido,0,,,,,180282
+cobertura_objetivo,champion,Primera sangre,,,sin_primero,152,,,,,180282
+cobertura_objetivo,champion,Primera sangre,,,contradictorio,0,,,,,180282
+objetivo,dragon,Primer dragón,total,,valido,179245,110367.0,61.57326564199838,61.347835960796395,61.79819927287144,180282
+objetivo,dragon,Primer dragón,azul,,valido,79131,49198.0,62.17285261149234,61.834378127915215,62.510145276513306,180282
+objetivo,dragon,Primer dragón,rojo,,valido,100114,61169.0,61.09934674471103,60.79693298873284,61.40090875073464,180282
+cobertura_objetivo,dragon,Primer dragón,,,ausente,0,,,,,180282
+cobertura_objetivo,dragon,Primer dragón,,,first_ausente,0,,,,,180282
+cobertura_objetivo,dragon,Primer dragón,,,first_invalido,0,,,,,180282
+cobertura_objetivo,dragon,Primer dragón,,,sin_primero,1037,,,,,180282
+cobertura_objetivo,dragon,Primer dragón,,,contradictorio,0,,,,,180282
+objetivo,horde,Primeras larvas,total,,valido,178662,98333.0,55.03856444011598,54.80779147548376,55.26912073839885,180282
+objetivo,horde,Primeras larvas,azul,,valido,97215,52379.0,53.87954533765365,53.56604061858727,54.19274346772074,180282
+objetivo,horde,Primeras larvas,rojo,,valido,81447,45954.0,56.421967659950646,56.08113241404838,56.76219714846914,180282
+cobertura_objetivo,horde,Primeras larvas,,,ausente,0,,,,,180282
+cobertura_objetivo,horde,Primeras larvas,,,first_ausente,0,,,,,180282
+cobertura_objetivo,horde,Primeras larvas,,,first_invalido,0,,,,,180282
+cobertura_objetivo,horde,Primeras larvas,,,sin_primero,1620,,,,,180282
+cobertura_objetivo,horde,Primeras larvas,,,contradictorio,0,,,,,180282
+objetivo,inhibitor,Primer inhibidor,total,,valido,159560,142289.0,89.17585861118074,89.0224717419093,89.32735918282681,180282
+objetivo,inhibitor,Primer inhibidor,azul,,valido,79658,70435.0,88.42175299404956,88.19770281162572,88.64209762362042,180282
+objetivo,inhibitor,Primer inhibidor,rojo,,valido,79902,71854.0,89.92766138519687,89.71705793967163,90.1344258005782,180282
+cobertura_objetivo,inhibitor,Primer inhibidor,,,ausente,0,,,,,180282
+cobertura_objetivo,inhibitor,Primer inhibidor,,,first_ausente,0,,,,,180282
+cobertura_objetivo,inhibitor,Primer inhibidor,,,first_invalido,0,,,,,180282
+cobertura_objetivo,inhibitor,Primer inhibidor,,,sin_primero,20722,,,,,180282
+cobertura_objetivo,inhibitor,Primer inhibidor,,,contradictorio,0,,,,,180282
+objetivo,riftHerald,Primer heraldo,total,,valido,162720,106624.0,65.52605703048181,65.29476306331189,65.7566179433163,180282
+objetivo,riftHerald,Primer heraldo,azul,,valido,87858,55915.0,63.64246852876232,63.32380447691995,63.959939639956154,180282
+objetivo,riftHerald,Primer heraldo,rojo,,valido,74862,50709.0,67.73663540915284,67.40085668066553,68.07059396028788,180282
+cobertura_objetivo,riftHerald,Primer heraldo,,,ausente,0,,,,,180282
+cobertura_objetivo,riftHerald,Primer heraldo,,,first_ausente,0,,,,,180282
+cobertura_objetivo,riftHerald,Primer heraldo,,,first_invalido,0,,,,,180282
+cobertura_objetivo,riftHerald,Primer heraldo,,,sin_primero,17562,,,,,180282
+cobertura_objetivo,riftHerald,Primer heraldo,,,contradictorio,0,,,,,180282
+objetivo,tower,Primera torre,total,,valido,177993,121530.0,68.27796598742647,68.06136764787063,68.49377539103165,180282
+objetivo,tower,Primera torre,azul,,valido,89230,60137.0,67.39549478874818,67.08717957057107,67.70231227745845,180282
+objetivo,tower,Primera torre,rojo,,valido,88763,61393.0,69.16508004461318,68.86044967275585,69.46805164694403,180282
+cobertura_objetivo,tower,Primera torre,,,ausente,0,,,,,180282
+cobertura_objetivo,tower,Primera torre,,,first_ausente,0,,,,,180282
+cobertura_objetivo,tower,Primera torre,,,first_invalido,0,,,,,180282
+cobertura_objetivo,tower,Primera torre,,,sin_primero,2289,,,,,180282
+cobertura_objetivo,tower,Primera torre,,,contradictorio,0,,,,,180282
+objetivo,voidGator,Objetivo voidGator,total,,valido,0,0.0,,,,180282
+objetivo,voidGator,Objetivo voidGator,azul,,valido,0,0.0,,,,180282
+objetivo,voidGator,Objetivo voidGator,rojo,,valido,0,0.0,,,,180282
+cobertura_objetivo,voidGator,Objetivo voidGator,,,ausente,11248,,,,,180282
+cobertura_objetivo,voidGator,Objetivo voidGator,,,first_ausente,0,,,,,180282
+cobertura_objetivo,voidGator,Objetivo voidGator,,,first_invalido,0,,,,,180282
+cobertura_objetivo,voidGator,Objetivo voidGator,,,sin_primero,169034,,,,,180282
+cobertura_objetivo,voidGator,Objetivo voidGator,,,contradictorio,0,,,,,180282
+combinacion_mismo_equipo,sangre_torre_dragon,sangre_torre_dragon,total,,valido,64127,49531.0,77.23891652502066,76.91276998874976,77.56179982089832,180282
+combinacion_mismo_equipo,sangre_torre_dragon,sangre_torre_dragon,azul,AAA,valido,29472,22813.0,77.40567318132464,76.92466763563034,77.87953540151787,180282
+combinacion_mismo_equipo,sangre_torre_dragon,sangre_torre_dragon,rojo,RRR,valido,34655,26718.0,77.09709998557207,76.65169641869673,77.53649686616632,180282
+combinacion_patron,sangre_torre_dragon,sangre_torre_dragon,azul,AAA,valido,29472,22813.0,77.40567318132464,76.92466763563034,77.87953540151787,177754
+combinacion_patron,sangre_torre_dragon,sangre_torre_dragon,azul,AAR,valido,23327,14107.0,60.47498606764693,59.84591346419421,61.10060922606379,177754
+combinacion_patron,sangre_torre_dragon,sangre_torre_dragon,azul,ARA,valido,14688,6607.0,44.98229847494554,44.179190938022245,45.78802995711585,177754
+combinacion_patron,sangre_torre_dragon,sangre_torre_dragon,azul,ARR,valido,22327,6135.0,27.477941505800153,26.896308693949223,28.06732302344188,177754
+combinacion_patron,sangre_torre_dragon,sangre_torre_dragon,azul,RAA,valido,17295,12580.0,72.73778548713501,72.06912648478809,73.3963459789163,177754
+combinacion_patron,sangre_torre_dragon,sangre_torre_dragon,azul,RAR,valido,19012,10543.0,55.45444982116558,54.74693083837665,56.15976505773344,177754
+combinacion_patron,sangre_torre_dragon,sangre_torre_dragon,azul,RRA,valido,16978,6665.0,39.25668512192249,38.524662153667,39.99356857622149,177754
+combinacion_patron,sangre_torre_dragon,sangre_torre_dragon,azul,RRR,valido,34655,7937.0,22.90290001442793,22.463503133833687,23.348303581303284,177754
+cobertura_combinacion,sangre_torre_dragon,sangre_torre_dragon,,,no_evaluable,2528,,,,,180282
+cobertura_combinacion,sangre_torre_dragon,sangre_torre_dragon,,,repartidos,113627,,,,,180282
+ausencia_combinacion,champion,Primera sangre,,,sin_primero,152,,,,,180282
+ausencia_combinacion,tower,Primera torre,,,sin_primero,2289,,,,,180282
+ausencia_combinacion,dragon,Primer dragón,,,sin_primero,1037,,,,,180282
+auditoria_archivos,,,,,duplicada,0,,,,,188917
+auditoria_archivos,,,,,duracion_invalida,0,,,,,188917
+auditoria_archivos,,,,,equipos_invalidos,0,,,,,188917
+auditoria_archivos,,,,,estructura_invalida,0,,,,,188917
+auditoria_archivos,,,,,estructura_objetivos_invalida,0,,,,,188917
+auditoria_archivos,,,,,ganador_invalido,0,,,,,188917
+auditoria_archivos,,,,,ilegible,0,,,,,188917
+auditoria_archivos,,,,,incluida,180282,,,,,188917
+auditoria_archivos,,,,,menos_5_minutos,8634,,,,,188917
+auditoria_archivos,,,,,otra_cola,1,,,,,188917
+auditoria_archivos,,,,,sin_id_partida,0,,,,,188917

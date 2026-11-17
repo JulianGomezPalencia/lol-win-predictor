@@ -8,12 +8,34 @@ from src.models import ingame, predict
 from src.models.explain import contributions
 
 ROOT = Path(__file__).resolve().parents[2]
-EXAMPLES = ROOT / "data/app/ejemplos.json"
-STATIC = ROOT / "data/static/champion_16.22.1.json"
+def asset_path(local, demo):
+    """Prefiere el producto local y recurre a la copia pública si falta."""
+    path = ROOT / "data" / local
+    return path if path.is_file() or path.is_dir() else ROOT / "demo" / demo
+
+
+def load_prior_model():
+    import joblib
+    return joblib.load(asset_path("models/modelo_final.joblib", "modelo_previo.joblib"))
+
+
+def prior_calculator(features, bundle=None):
+    import pandas as pd
+    bundle = load_prior_model() if bundle is None else bundle
+    row = pd.DataFrame([{name: features.get(name, 0.) for name in bundle["features"]}])
+    probability = bundle["model"].predict_proba(row)[0]
+    classes = list(bundle["model"].classes_)
+    return {"prob_azul": float(probability[classes.index(1)]),
+            "factores": contributions(bundle, row.iloc[0].to_dict())}
+
+
+def load_ingame_model():
+    return ingame.load_bundle(asset_path("models/modelos_en_partida.joblib", "modelos_en_partida.joblib"))
 POSITIONS = {"TOP": "Superior", "JUNGLE": "Jungla", "MIDDLE": "Central", "BOTTOM": "Inferior", "UTILITY": "Apoyo"}
 
 
-def champion_names(path=STATIC):
+def champion_names(path=None):
+    path = asset_path("static/champion_16.22.1.json", "champion_16.22.1.json") if path is None else path
     try:
         data = json.loads(Path(path).read_text())["data"]
         return {int(c["key"]): c["name"] for c in data.values()}
@@ -21,9 +43,9 @@ def champion_names(path=STATIC):
         return {}
 
 
-def public_example(example, index=1):
+def public_example(example, index=1, names=None):
     """Lista blanca. Etiquetas y nombres se reconstruyen, nunca se copian del JSON."""
-    names = set(champion_names().values())
+    names = set(champion_names().values()) if names is None else set(names)
     champions = example.get("campeones", {})
     return {"etiqueta": f"Partida {index}", "gana_azul": bool(example["gana_azul"]),
             "prob_previa": None if example.get("prob_previa") is None else float(example["prob_previa"]),
@@ -33,7 +55,8 @@ def public_example(example, index=1):
                         for e in example.get("eventos", []) if e.get("tipo") in ("dragón", "torre", "barón") and e.get("equipo") in ("azul", "rojo")]}
 
 
-def load_examples(path=EXAMPLES):
+def load_examples(path=None):
+    path = asset_path("app/ejemplos.json", "ejemplos.json") if path is None else path
     try:
         raw = json.loads(Path(path).read_text())
         if not isinstance(raw, list):
@@ -99,7 +122,8 @@ def live(riot_id, bundle, progress=lambda _: None):
 
 
 def findings_paths(analysis=None, figures=None):
-    paths = [Path(analysis or ROOT / "data/analysis"), Path(figures or ROOT.parent / "ai_project/final/figuras")]
+    paths = [Path(analysis) if analysis is not None else asset_path("analysis", "analysis"),
+             Path(figures) if figures is not None else asset_path("analysis/figuras", "figuras")]
     return {"tablas": sorted(paths[0].glob("*.csv")), "figuras": sorted(set(p for directory in [*paths, paths[0] / "figuras"] for p in directory.glob("*.png")))}
 
 

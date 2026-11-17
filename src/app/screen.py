@@ -101,6 +101,18 @@ def main():
             st.info("Todavía no hay modelos por minuto para usar la calculadora.")
         except Exception:
             st.info("No hay un modelo disponible para este minuto.")
+        with st.expander("Calculadora antes de la partida"):
+            try:
+                from src.models.explain import LABELS
+                prior = logic.load_prior_model()
+                values = {name: st.number_input(LABELS[name].capitalize(), value=0., key=name)
+                          for name in prior["features"]}
+                result = logic.prior_calculator(values, prior)
+                st.metric("Probabilidad previa del azul", percent(result["prob_azul"]))
+                for factor in result["factores"][:3]:
+                    st.write(factor["frase"])
+            except FileNotFoundError:
+                st.info("No está disponible el modelo previo para esta calculadora.")
     with learned_tab:
         paths = logic.findings_paths()
         if not any(paths.values()):

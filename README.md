@@ -12,7 +12,7 @@ they're playing a champion they're comfortable on. The saved 10-variable model a
 python3 -m venv .venv            # create an isolated Python environment
 source .venv/bin/activate        # activate it (do this every time you open a new terminal)
 pip install -r requirements.txt  # install the libraries
-cp .env.example .env             # then paste your Riot API key into .env
+cp .env.example .env             # optional, only for collection and live queries
 ```
 
 ## Collecting the data
@@ -46,8 +46,8 @@ would go over Riot's limit (100 requests / 2 minutes).
     python -m src.models.train         # baselines, logistic regression, random forest + metrics, also per rank band
     python -m src.models.predict --freeze         # historical, completed ONCE: keep the 22-variable model as the base, fit the 10-variable candidate
     python -m src.models.predict --evaluate-new   # historical, completed: frozen candidate vs base on matches collected after the freeze
-    python -m src.models.predict --train          # refit after both tests; keep a dated copy of the current bundle
-    python -m src.models.predict --evaluate-final # second test, completed; never refits
+    python -m src.models.predict --train          # refit after both tests. keep a dated copy of the current bundle
+    python -m src.models.predict --evaluate-final # second test, completed. never refits
     python -m src.models.predict LA1_123456       # probability that blue won that (already played) match
     python -m src.models.predict --live "Name#TAG"   # a game in progress, before it ends
     python -m src.models.predict --watch --watch-minutes 60 --max-games 20  # watch local seeds, collection stopped
@@ -142,16 +142,16 @@ The first independent test spans 2026-10-22 through 2026-11-05. Asking for more 
 
     cp data/db/lol.sqlite data/db/lol_antes_de_ampliar.sqlite   # 1. backup of the database before growing it
     caffeinate -i .venv/bin/python -m scripts.run_pipeline --steps discover --matches-per-player 15 --days-back 14
-        # 2. queue more matches (1 call per player); caffeinate keeps the Mac awake
+        # 2. queue more matches (1 call per player). caffeinate keeps the Mac awake
     caffeinate -i .venv/bin/python -m scripts.run_pipeline --steps fetch,history --limit 300
         # 3. download and validate up to 300 queued matches, then their players' histories (the slow part)
     cp -R data/export data/export_2026-11-09
         # 4a. once only: keep the export the notebook reproduces (2,973 matches) before overwriting it
     .venv/bin/python -m scripts.export_dataset
-        # 4b. STOP collection first; database -> CSV files, including participant_spells.csv
+        # 4b. STOP collection first. database -> CSV files, including participant_spells.csv
     .venv/bin/python -m src.models.predict --evaluate-final
         # 5. only after collection stops and export completes: second test, no refit
-        # Historical collection sequence; do not repeat export while collection is running.
+        # Historical collection sequence. do not repeat export while collection is running.
 
 Measured cost (an estimate from the first collection): about 64 calls and 1.3 minutes per match, so 300
 matches take about 6.5 hours and 1,000 about 22 hours. Run it as the only process using the API key.
@@ -259,14 +259,16 @@ probar diferencias de juego y leer los resultados. La abrimos desde la raíz.
 .venv/bin/python -m src.app
 ```
 
-La página se abre en `http://127.0.0.1:8501`. La interfaz cargó sus cuatro pestañas y la batería completa terminó con 325 pruebas aprobadas. La consulta
+La página se abre en `http://127.0.0.1:8501`. En la comprobación del 16 de noviembre la interfaz cargó sus cuatro pestañas y
+la batería completa terminó con 325 pruebas aprobadas. La consulta
 en vivo tarda varios minutos y usa credenciales de Riot. El dato escrito para buscar
 al jugador no se guarda. Esperamos a que termine cualquier descarga antes de consultar.
 
 ## Modo de demostración
 
 Abrimos la misma interfaz y elegimos Repetición para recorrer los ejemplos de
-`data/app/ejemplos.json`. No hay un comando ni un interruptor de demo aparte.
+`data/app/ejemplos.json` o, si falta, `demo/ejemplos.json`. No hay un comando
+ni un interruptor de demo aparte.
 Los ejemplos guardados funcionan sin credenciales ni partida activa. En Qué aprendimos
 podemos leer las tablas y figuras locales. La calculadora necesita los modelos guardados,
 deja en cero las variables sin control visible y usa el modelo del minuto 30 para los
@@ -280,14 +282,40 @@ necesita que se le proporcione ese CSV mediante `--candidates RUTA_AL_CSV`, adem
 las partidas y líneas de tiempo en caché y `data/models/modelos_en_partida.joblib`.
 No genera el CSV de candidatas.
 
-La demo, la calculadora y Qué aprendimos necesitan archivos locales bajo `data/`,
-que está ignorado por git. Un clon nuevo debe ejecutar primero los comandos de
-recolección, exportación, descarga y entrenamiento indicados arriba. Las tablas,
-figuras y ejemplos se produjeron con
-`.venv/bin/python scripts/analisis/minuto.py --final` y los
-objetivos con `.venv/bin/python scripts/analisis/objetivos.py`.
-El análisis confirmatorio se ejecuta una sola vez y tiene una guardia contra repeticiones.
-También se necesita el catálogo local `data/static/champion_16.22.1.json` para los
-nombres de campeones. Estos archivos privados y los scripts de la corrida de análisis
-no se distribuyen con el clon, por lo que los comandos del repositorio por sí solos
-no preparan toda la demo. Para reproducirla hay que disponer de esos insumos locales.
+El clon incluye `demo/` con doce ejemplos, las cinco tablas, las figuras 3 a 5,
+el catálogo de campeones y los modelos para ambas calculadoras. La interfaz busca
+primero cada producto en `data/` y, si falta, usa la copia pública de `demo/`.
+No hace falta crear `.env` para abrir las repeticiones y los resultados.
+La calculadora previa usa diez diferencias numéricas y muestra los factores que
+más pesan. Solo la consulta en vivo requiere credenciales y conexión.
+
+Regeneramos la copia pública después de producir los datos locales con:
+
+```bash
+python scripts/build_demo.py
+```
+
+El comando no consulta Riot. Exporta el pipeline previo sin tablas por jugador,
+omite identificadores de entrenamiento y de ejemplos, quita la columna `fuente`
+y comprueba que el total no supere 15 MB. Ver [demo/LEEME.md](demo/LEEME.md).
+
+Los análisis locales se encuentran en `scripts/analisis/`:
+
+```bash
+python -m scripts.analisis.minuto --debug
+python -m scripts.analisis.minuto --final
+python -m scripts.analisis.previo_misma_poblacion
+python -m scripts.analisis.objetivos
+python scripts/check_timeline_consistency.py
+```
+
+Necesitan la base, exportaciones, caché de partidas y líneas de tiempo, el modelo
+congelado y los resultados de prueba originales bajo `data/`. El protocolo está en
+[scripts/analisis/protocolo.md](scripts/analisis/protocolo.md). `--debug` revisa solo
+entrenamiento. `--final` realiza una evaluación confirmatoria y deja una guardia
+contra repeticiones. La corrección del previo añade filas una sola vez a la tabla
+original. Estos comandos pueden tardar y no se necesitan para usar la demo.
+Escriben informes, auditorías, tablas y figuras en `data/analysis/`, con temporales
+en `data/analysis/tmp/`. El análisis por minuto también genera el modelo en
+`data/models/` y ejemplos en `data/app/`. La comprobación de eventos guarda
+`data/analysis/consistencia.md`.
