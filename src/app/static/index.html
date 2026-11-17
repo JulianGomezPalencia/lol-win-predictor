@@ -27,7 +27,7 @@
       <section id="view-0">
         <h1>¿Quién gana?</h1>
         <p class="intro">
-          Diez campeones. Dos equipos. ¿Se puede saber quién gana antes de empezar?
+          Cinco jugadores por equipo, cada uno con un personaje: su campeón. Debajo, su historial reciente.
         </p>
         <label
           >Partida de la prueba
@@ -39,8 +39,10 @@
           ><button id="winner" class="secondary">Ver quién ganó</button
           ><button id="reset-votes" class="secondary">Reiniciar votos</button>
         </div>
+        <div class="result-strip">
         <p id="prediction-result" class="result" aria-live="polite"></p>
         <p id="winner-result" class="result" aria-live="polite"></p>
+        </div>
         <p class="note">
           Medias por equipo del historial anterior a la partida. El KDA compara
           asesinatos y asistencias con muertes. Las partidas con el campeón se
@@ -49,6 +51,7 @@
       </section>
       <section id="view-1" hidden>
         <h1>Cuándo se decide</h1>
+        <p class="intro">Las líneas muestran el porcentaje de predicciones acertadas en cada minuto.</p>
         <div class="headline">
           <span><strong>57 %</strong> antes de jugar</span
           ><span><strong>81 %</strong> al minuto 25</span>
@@ -62,13 +65,13 @@
         </div>
         <div id="accuracy-summary" aria-label="Acierto por minuto"></div>
         <p class="note">
-          El 57 % corresponde a 1.264 partidas nuevas. Las dos curvas usan las
-          mismas partidas en cada minuto. La muestra cambia al terminar partidas
-          y no fija un minuto universal.
+          Antes de jugar: 57 % en 1.264 partidas nuevas. Las curvas comparan las mismas
+          partidas por minuto. La muestra baja al terminar partidas. No hay un minuto que decida todas.
         </p>
       </section>
       <section id="view-2" hidden>
         <h1>Una partida, minuto a minuto</h1>
+        <p class="intro">La línea estima la victoria del equipo azul. Un 50 % indica igual probabilidad.</p>
         <div class="replay-controls">
           <label
             >Ejemplo
@@ -90,17 +93,17 @@
             aria-label="Probabilidad del azul hasta el minuto mostrado"
           ></canvas>
         </div>
-        <p id="events" aria-live="polite"></p>
+        <ul id="events" aria-live="polite"></ul>
       </section>
       <section id="view-3" hidden>
         <h1>¿Qué objetivos acompañan la victoria?</h1>
         <p class="intro">
-          Victoria del equipo que consiguió primero cada objetivo.
+          Porcentaje de victorias de quien consiguió primero una baja rival, una criatura o una estructura.
         </p>
         <div id="objectives"></div>
         <p class="note">
           Son asociaciones. Los equipos que van ganando también consiguen más
-          objetivos. Cada tasa usa solo partidas con un primer equipo válido.
+          objetivos. Cada porcentaje cuenta solo las partidas donde ese objetivo ocurrió.
         </p>
       </section>
       <section id="view-4" hidden>
@@ -118,6 +121,7 @@
       </section>
       <section id="view-5" hidden>
         <h1>Partida en vivo</h1>
+        <p class="intro">Escribe el nombre de un jugador que esté en una partida clasificatoria. La respuesta puede tardar varios minutos.</p>
         <p id="live-status"></p>
         <form id="live-form" hidden>
           <label
@@ -134,10 +138,10 @@
       </section>
       <section id="view-6" hidden>
         <h1>Qué aprendimos</h1>
+        <p class="intro">El historial da una pista. Lo que pasa durante la partida cambia la predicción.</p>
         <div class="lessons">
           <p>
-            <strong>57 %</strong> en 1.264 partidas nuevas. Evaluar con datos
-            futuros cambia lo que podemos afirmar.
+            <strong>57 %</strong> de acierto antes de jugar en 1.264 partidas que el modelo no vio al entrenar. Apenas mejor que lanzar una moneda.
           </p>
           <p>
             <strong>78 %</strong> al minuto 15. El estado de juego aporta más
@@ -154,7 +158,7 @@
         </p>
         <p class="note">
           La prueba en vivo tuvo 12 aciertos en 27 partidas. No alcanza para concluir.
-          La consulta en vivo es opcional. Necesita una clave vigente
+          La consulta en vivo es opcional. Necesita una credencial vigente de Riot
           y una partida clasificatoria activa. La presentación usa ejemplos
           guardados.
         </p>

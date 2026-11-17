@@ -1,16 +1,19 @@
 # Sistema visual
 
 ## Dirección
-Un marcador de competición convertido en una herramienta de lectura. Fondo frío claro para un salón iluminado, tinta oscura y equipos distinguidos por azul y rojo, siempre con su nombre escrito. Las cifras de probabilidad y el trazado temporal son el centro. La interfaz permite comparar y revelar, sin adornos que compitan con los datos.
+Inspiración hextech de League of Legends para leer una partida en clase. Azul noche, dorado envejecido, marcos finos y retratos cuadrados de los personajes. Sin logotipos oficiales ni resplandores. Un fondo radial azul tenue, remates biselados y una regla dorada con rombo acompañan los datos. Los datos llevan el peso de cada vista.
 
-## Tipografía y escala
-Georgia en títulos y sistema sans serif para controles y lectura. Cifras tabulares. Títulos entre 36 y 60 px. Cifras principales de 72 px y 80 px en presentación. Texto de 18 px y 22 px al proyectar.
+## Paleta
+Fondo #09151f, superficie #10232e, texto #f1ebdc y texto secundario #b6c4ca. Dorado #d4b573 para acciones, títulos de marca y resultados. Equipo azul #73d4df y equipo rojo #f69a91, siempre con su nombre escrito. Bordes #3b505a y marcos #85734f. Texto normal con contraste AA sobre ambas superficies. Selección, cursor de escritura, controles, foco y gráficos comparten estos colores.
+
+## Tipografía
+Cinzel en títulos y marca. Barlow en lectura, controles y cifras tabulares. Archivos locales con licencia OFL en static/fonts. Títulos de 32 a 52 px, lectura de 18 px y cifras de 64 a 80 px en presentación de escritorio. En móvil las cifras secundarias bajan a 48 px. Sin fuentes de red.
 
 ## Composición
-Cabecera breve, navegación horizontal y una sola vista activa. Equipos en dos columnas, posiciones alineadas en filas. Gráficos anchos con ejes y leyenda. Repetición con reloj, probabilidad y lista de eventos hasta el minuto visible. Objetivos en filas, con tasa y muestra juntas.
+Cabecera sobria, navegación horizontal y una vista activa. Equipos enfrentados en dos columnas, con cinco filas de retrato, nombre y posición. Tres medias del historial bajo cada equipo. Los retratos proceden de Data Dragon 16.22.1 y usan una inicial si faltan. Gráficos anchos con rejilla tenue, ejes claros y leyenda escrita. Las seis tasas de objetivos se leen en dos filas al proyectar. Sin tarjetas anidadas.
 
 ## Interacción
-Foco visible, botones de al menos 44 px y mensajes de carga o error en una región anunciada. P entra o sale de presentación. Las flechas recorren votación, acierto, repetición, objetivos y Qué aprendimos antes de regresar a la votación. En repetición, derecha avanza el reloj hasta el final, con pausa en el 15. El botón Siguiente vista permite salir antes. R selecciona una remontada sin mostrar una pista al público.
+P activa presentación. Flechas recorren votación, acierto, repetición, objetivos y Qué aprendimos. En repetición la flecha derecha avanza el reloj. R carga una remontada. Los votos quedan ocultos en presentación y se muestran en modo normal. Botones de al menos 44 px, foco turquesa y estados de error anunciados. Sin animaciones de entrada. Movimiento reducido elimina transiciones de controles.
 
-## Adaptación
-A 1280 por 720 la presentación conserva controles y gráficos dentro del alto disponible. A 1920 por 1080 gana aire. En móvil se apilan equipos y formularios. Movimiento reducido respeta la preferencia del sistema.
+## Adaptación y lectura
+Presentación de escritorio comprobada a 1280 por 720 y 1920 por 1080. En escritorio el contenido se centra en vertical. En 720p se compactan filas y las dos respuestas comparten una franja bajo las acciones. El 57 % previo permanece visible. En móvil se apilan equipos, campos y conclusiones, con desplazamiento vertical natural. Cada vista explica cómo leer los resultados sin exigir conocimiento del juego. El 50 % indica igual probabilidad para ambos equipos. Las tasas de objetivos muestran asociación, sin afirmar causalidad.

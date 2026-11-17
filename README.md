@@ -2,7 +2,7 @@
 
 Estimamos la probabilidad de victoria en League of Legends antes de jugar y estudiamos cómo cambia al observar la partida.
 
-![Votación y predicción de una partida guardada](docs/img/presentacion.png)
+![Predicción del modelo para una partida guardada, en modo presentación](docs/img/presentacion.png)
 
 ## Tres hallazgos
 
@@ -68,4 +68,4 @@ Julian Gomez
 
 Inteligencia Artificial 1 · Universidad Industrial de Santander (UIS) · 2026.
 
-Proyecto académico sin relación con Riot Games. No está respaldado ni patrocinado por Riot Games.
+Proyecto académico sin relación con Riot Games. No está respaldado ni patrocinado por Riot Games. Los retratos de campeones vienen de Data Dragon y pertenecen a Riot Games. Las fuentes Cinzel y Barlow usan la licencia SIL Open Font License.

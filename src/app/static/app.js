@@ -9,6 +9,10 @@ const titles = [
   "Partida en vivo",
   "Qué aprendimos",
 ];
+const palette = Object.fromEntries(
+  ["ink", "muted", "line", "blue", "red", "accent", "event-baron"].map((name) =>
+    [name, getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim()]),
+);
 const roles = ["Superior", "Jungla", "Central", "Inferior", "Apoyo"];
 let view = 0,
   examples = [],
@@ -18,7 +22,8 @@ let view = 0,
   replayChart,
   accuracyChart,
   replayIndex = -1,
-  generation = 0;
+  generation = 0,
+  championIcons = {};
 async function api(path, options) {
   const response = await fetch(`/api/${path}`, options);
   const data = await response.json();
@@ -85,8 +90,19 @@ function renderTeams() {
     article.append(node("h2", `Equipo ${team}`));
     const list = node("ul", "", "roster");
     example.campeones[team].forEach((name, i) => {
-      const li = node("li", name);
-      li.append(node("span", roles[i], "role"));
+      const li = node("li");
+      const portrait = node("span", name.charAt(0), "portrait");
+      portrait.setAttribute("aria-hidden", "true");
+      if (championIcons[name]) {
+        const image = document.createElement("img");
+        image.src = `/static/champions/${championIcons[name]}.png`;
+        image.alt = "";
+        image.width = 40;
+        image.height = 40;
+        image.onerror = () => image.remove();
+        portrait.append(image);
+      }
+      li.append(portrait, node("span", name, "champion-name"), node("span", roles[i], "role"));
       list.append(li);
     });
     const vote = node("div", "", "vote"),
@@ -102,8 +118,8 @@ function renderTeams() {
     const summary = example.historial?.[team] || {};
     [
       ["winrate_10", "Victorias recientes", percent],
-      ["kda_medio", "KDA reciente", (v) => v.toFixed(1)],
-      ["partidas_con_campeon", "Partidas con el campeón", (v) => v.toFixed(1)],
+      ["kda_medio", "Bajas y ayudas por muerte", (v) => v.toFixed(1)],
+      ["partidas_con_campeon", "Partidas con ese campeón", (v) => v.toFixed(1)],
     ].forEach(([field, label, format]) => {
       const item = node("div");
       item.append(node("dt", label), node("dd", summary[field] == null ? "Sin datos" : format(summary[field])));
@@ -130,18 +146,19 @@ const chartOptions = () => ({
   responsive: true,
   maintainAspectRatio: false,
   animation: false,
-  plugins: { legend: { labels: { color: "#202b2e", font: { size: chartFont() } } } },
+  plugins: { legend: { labels: { usePointStyle: true, color: palette["ink"], font: { size: chartFont() } } } },
   scales: {
     x: {
-      ticks: { color: "#202b2e", font: { size: chartFont() } },
+      ticks: { color: palette["ink"], font: { size: chartFont() } },
       title: { display: true, text: "Minuto", font: { size: chartFont() } },
     },
     y: {
       min: 0,
       max: 1,
       ticks: {
-        color: "#202b2e",
+        color: palette["ink"],
         callback: (v) => `${Math.round(v * 100)} %`,
+        stepSize: 0.5,
         font: { size: chartFont() },
       },
     },
@@ -169,17 +186,22 @@ function drawReplay() {
   $("probability").textContent = percent(point.prob_azul);
   $("pause").textContent =
     point.minuto === 15
-      ? "Pausa. ¿Quién gana ahora?"
+      ? "Pausa en el minuto 15."
       : position === replay.curva.length - 1
-        ? "Fin de la repetición. El ganador se revela en ¿Quién gana?"
+        ? "Fin de la repetición."
         : "";
   $("step").disabled = position >= replay.curva.length - 1;
   const visibleEvents = replay.eventos.filter((e) => e.minuto <= point.minuto);
-  $("events").textContent =
-    visibleEvents
-      .slice(-4)
-      .map((e) => `${e.tipo} ${e.equipo} · ${Math.floor(e.minuto)} min`)
-      .join(" / ") || "Todavía no hay objetivos registrados.";
+  $("events").replaceChildren(
+    ...visibleEvents.slice(-4).map((e) => {
+      const item = node("li");
+      item.append(node("span", `Min ${Math.floor(e.minuto)}`),
+        node("span", `${e.tipo.charAt(0).toUpperCase()}${e.tipo.slice(1)} del ${e.equipo}`));
+      return item;
+    }),
+  );
+  if (!visibleEvents.length)
+    $("events").append(node("li", "Todavía no hay objetivos registrados."));
   replayChart?.destroy();
   replayChart = new Chart($("replay"), {
     type: "line",
@@ -187,8 +209,9 @@ function drawReplay() {
       datasets: [
         {
           label: "Probabilidad del azul",
+          pointStyle: "line",
           data: points.map((p) => ({ x: p.minuto, y: p.prob_azul })),
-          borderColor: "#1555a0",
+          borderColor: palette["blue"],
           borderWidth: 3,
           pointRadius: 2,
         },
@@ -204,7 +227,7 @@ function drawReplay() {
                 points[0],
               ).prob_azul,
             })),
-          backgroundColor: ["#a63231", "#202b2e", "#6f4c89", "#93651d"][i],
+          backgroundColor: [palette["red"], palette["ink"], palette["event-baron"], palette["accent"]][i],
           pointStyle: ["triangle", "rect", "rectRot", "star"][i],
           pointRadius: 7,
         })),
@@ -266,8 +289,10 @@ $("winner").onclick = safe(async () => {
   const index = $("example").value;
   const data = await api(`examples/${index}/winner`);
   if (index === $("example").value)
-    $("winner-result").textContent =
-      `Ganó el equipo ${data.gana_azul ? "azul" : "rojo"}`;
+    $("winner-result").replaceChildren(
+      node("span", "Resultado"),
+      node("strong", `Ganó el ${data.gana_azul ? "azul" : "rojo"}`, data.gana_azul ? "blue" : "red"),
+    );
 });
 $("replay-example").onchange = safe(() => loadReplay(true));
 $("step").onclick = step;
@@ -363,6 +388,13 @@ $("live-form").onsubmit = safe(async (e) => {
   }
 });
 async function init() {
+  Chart.defaults.color = palette["muted"];
+  Chart.defaults.borderColor = palette["line"];
+  Chart.defaults.font.family = "Barlow, sans-serif";
+  try {
+    const response = await fetch("/static/champions/manifest.json");
+    if (response.ok) championIcons = await response.json();
+  } catch (_) { /* Initials remain available when portraits are missing. */ }
   const results = await Promise.allSettled([
     api("examples"),
     api("findings"),
@@ -395,14 +427,15 @@ async function init() {
       data: {
         labels: [5, 10, 15, 20, 25],
         datasets: [
-          ["estado", "Estado de juego", "#1555a0"],
+          ["estado", "Estado de juego", palette["blue"]],
           [
             "previo_misma_poblacion",
-            "Previo en las mismas partidas",
-            "#a63231",
+            "Antes de jugar, mismas partidas",
+            palette["red"],
           ],
         ].map(([model, label, color]) => ({
           label,
+          pointStyle: "line",
           data: rows.filter((r) => r.modelo === model).map((r) => r.acierto),
           borderColor: color,
           borderWidth: 3,
@@ -418,10 +451,10 @@ async function init() {
       $("accuracy-summary").append(point);
     });
     const definitions = [
-      ["champion", "Primera sangre"],
+      ["champion", "Primera baja rival"],
       ["dragon", "Primer dragón"],
       ["tower", "Primera torre"],
-      ["sangre_torre_dragon", "Las tres juntas"],
+      ["sangre_torre_dragon", "Baja, dragón y torre"],
       ["baron", "Primer barón"],
       ["inhibitor", "Primer inhibidor"],
     ];
@@ -445,7 +478,7 @@ async function init() {
   }
   if (results[2].status === "fulfilled")
     results[2].value.variables.forEach((f) => {
-      const label = node("label", f.etiqueta),
+      const label = node("label", f.etiqueta.charAt(0).toUpperCase() + f.etiqueta.slice(1)),
         input = document.createElement("input");
       input.type = "number";
       input.name = f.nombre;
@@ -458,7 +491,7 @@ async function init() {
       $("fields").append(label);
     });
   if (results[3].status === "fulfilled") {
-    $("live-status").textContent = results[3].value.mensaje;
+    $("live-status").textContent = results[3].value.disponible ? "" : results[3].value.mensaje;
     $("live-form").hidden = !results[3].value.disponible;
   }
 }

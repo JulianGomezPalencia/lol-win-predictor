@@ -159,3 +159,34 @@ def test_presentation_hides_votes(client):
     rule = re.search(r'body\.presenting \.vote,\s*body\.presenting #reset-votes\s*\{\s*display:\s*none', css)
     assert rule is not None
     assert 'Tu voto' not in client.get('/').text
+
+
+@pytest.mark.parametrize('filename', ['Cinzel.ttf', 'Barlow-Regular.ttf', 'Barlow-SemiBold.ttf'])
+def test_local_fonts(client, filename):
+    response = client.get(f'/static/fonts/{filename}')
+    assert response.status_code == 200
+    assert response.mimetype == 'font/ttf'
+    assert response.data[:4] == b'\x00\x01\x00\x00'
+
+
+def test_local_champion_icons_cover_demo(client):
+    manifest = client.get('/static/champions/manifest.json')
+    assert manifest.status_code == 200
+    mapping = manifest.json
+    names = {name for row in client.get('/api/examples').json
+             for team in row['campeones'].values() for name in team}
+    assert names == set(mapping)
+    for champion_id in set(mapping.values()):
+        response = client.get(f'/static/champions/{champion_id}.png')
+        assert response.status_code == 200
+        assert response.mimetype == 'image/png'
+        assert response.data.startswith(b'\x89PNG\r\n\x1a\n')
+
+
+def test_page_resources_are_local(client):
+    html = client.get('/').text
+    resources = re.findall(r'(?:src|href)=[\"\']([^\"\']+)', html)
+    assert resources
+    assert all(url.startswith('/') and not url.startswith('//') for url in resources)
+    css = client.get('/static/app.css').text
+    assert not re.search(r'url\([\"\']?(?:https?:)?//', css)
