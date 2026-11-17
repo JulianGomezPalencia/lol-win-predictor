@@ -138,3 +138,16 @@ def test_missing_products_and_inhibitor(client, monkeypatch):
     safe = logic.public_example({'gana_azul': True, 'curva': [], 'eventos': [
         {'minuto': 15, 'tipo': 'inhibidor', 'equipo': 'azul'}]})
     assert safe['eventos'][0]['tipo'] == 'inhibidor'
+
+
+def test_local_favicon(client):
+    from xml.etree import ElementTree
+
+    html = client.get('/').text
+    assert 'href="/static/favicon.svg"' in html
+    for path in ('/static/favicon.svg', '/favicon.ico'):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.mimetype == 'image/svg+xml'
+        assert ElementTree.fromstring(response.data).tag == '{http://www.w3.org/2000/svg}svg'
+    assert client.get('/static/favicon.svg').data == client.get('/favicon.ico').data

@@ -24,7 +24,7 @@ python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
 
 Abre http://127.0.0.1:8000. La página usa Flask y archivos locales. Incluimos ejemplos, modelos y tablas en `demo/`. Si existen productos en `data/`, la aplicación los prefiere. Después de instalar, la demo funciona sin internet.
 
-P activa el modo presentación. Las flechas cambian de vista y, en Repetición, mueven el reloj. Siguiente vista permite salir de la repetición. R carga una remontada. La predicción y el ganador se revelan por separado. Para Calculadora, Partida en vivo o Qué aprendimos, sal del modo con Esc y usa la navegación. La consulta en vivo requiere credenciales y el modelo local completo.
+P activa el modo presentación. Las flechas cambian de vista y, en Repetición, mueven el reloj. Siguiente vista permite salir de la repetición. R carga una remontada. La predicción y el ganador se revelan por separado. El ciclo incluye Qué aprendimos antes de volver a ¿Quién gana?. Para Calculadora o Partida en vivo, sal del modo con Esc y usa la navegación. La consulta en vivo requiere credenciales y el modelo local completo.
 
 ## Cómo lo hicimos
 
@@ -48,21 +48,19 @@ Conservamos los datos brutos en privado y distribuimos ejemplos sin nombres ni i
 
 ## Reproducir con datos propios
 
-Crea `.env` desde `.env.example` y configura las credenciales de Riot. Usa un solo proceso con red a la vez. La siguiente secuencia recoge datos, los exporta, prepara variables, entrena modelos y produce los análisis. No es necesaria para abrir la demo.
+Crea `.env` desde `.env.example` y configura las credenciales de Riot. Usa un solo proceso con red a la vez. Estas órdenes recogen y exportan datos propios. Suponen el entorno activado con `source .venv/bin/activate` y no son necesarias para abrir la demo.
 
 ```bash
 python -m scripts.run_pipeline --steps seed,discover
-python -m scripts.run_pipeline
+python -m scripts.run_pipeline --steps fetch,history
 python -m scripts.export_dataset
-python -m src.features.build
-python -m src.models.train
-python scripts/download_timelines.py --max 2800 --minutes 75
-python -m src.models.ingame --train --before 2026-11-09T18:09:41+00:00
-python -m scripts.analisis.minuto --debug
-python -m scripts.analisis.objetivos
 ```
 
-Estos comandos suponen el entorno activado con `source .venv/bin/activate`. Los modelos congelados, exportaciones y registros privados de la evaluación original no se reconstruyen desde la demo. Para repetir el estudio con datos propios hay que reservar otra prueba y fijar su corte antes de mirar resultados. Conservamos instrucciones de evaluación, vigilancia, notebook y regeneración en [uso avanzado](docs/uso_avanzado.md) y el [protocolo](scripts/analisis/protocolo.md).
+La [receta para datos propios](docs/uso_avanzado.md#variables-y-posiciones) fija un corte nuevo, construye el historial de campeones solo con entrenamiento, infiere posiciones antes de jugar y ajusta exclusivamente las diez variables de `build.FINAL_FEATURES`. Incluye una evaluación posterior sin reajuste. Los comandos generales `python -m src.features.build` y `python -m src.models.train` son exploratorios y no reproducen esa receta.
+
+Los análisis de `scripts/analisis/` tienen requisitos distintos. `minuto --debug` solo comprueba entrenamiento, limita a cien partidas el cálculo previo fuera de muestra y no genera una evaluación nueva. Tanto ese modo como `--final` necesitan el modelo histórico privado `data/models/modelo_final_2026-11-09.joblib`. El análisis final además exige exportaciones, registros y caché originales, usa el corte fijo del 9 de noviembre de 2026 y comprueba las 1.264 partidas originales. Esos archivos no están en un clon y la demo no los reconstruye. Cambiar solo el modelo o la fecha no adapta ese estudio a otra muestra.
+
+Para entrenar y evaluar estados por minuto con otro corte, y para conocer los requisitos de objetivos y de la comparación previa, consulta [uso avanzado](docs/uso_avanzado.md#líneas-de-tiempo-y-modelos-por-minuto) y el [protocolo histórico](scripts/analisis/protocolo.md).
 
 ## Autores
 

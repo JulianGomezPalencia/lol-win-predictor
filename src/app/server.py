@@ -23,6 +23,10 @@ def create_app():
     def index():
         return app.send_static_file("index.html")
 
+    @app.get("/favicon.ico")
+    def favicon():
+        return app.send_static_file("favicon.svg")
+
     @app.get("/api/examples")
     def examples():
         # The final outcome and prior prediction are separate reveal operations.

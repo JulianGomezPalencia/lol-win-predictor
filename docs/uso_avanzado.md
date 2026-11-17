@@ -57,15 +57,44 @@ En macOS se puede anteponer `caffeinate -i` al proceso largo para impedir que el
 
 ## Variables y posiciones
 
+La receta previa infiere posiciones con hechizos, campeón e historial anterior. Asigna una posición distinta a cada integrante. No lee las posiciones asignadas al terminar la partida. El rango consultado después de jugar queda como contexto y no entra como predictor.
+
+Los comandos generales `python -m src.features.build` y `python -m src.models.train` son exploratorios. El primero conserva por defecto posiciones posteriores y el segundo selecciona las variables presentes en su tabla. No reproducen el modelo previo de diez variables.
+
+Tras exportar con `python -m scripts.export_dataset`, fija `CORTE` antes de mirar los resultados. Sustituye la fecha del ejemplo por el corte de tu recogida, con suficientes partidas anteriores para la validación temporal y nuevas partidas posteriores para una sola evaluación. No uses las cifras históricas como resultados de este ajuste.
+
 ```bash
-python -m scripts.export_dataset
-python -m src.features.build
-python -m src.models.train
+CORTE=2026-11-18T00:00:00+00:00 python - <<'PY'
+import os
+from pathlib import Path
+import pandas as pd
+from src.features import build
+from src.models import predict, train
+
+export = Path("data/export")
+cut = int(pd.Timestamp(os.environ["CORTE"]).timestamp() * 1000)
+matches, history = predict._read_export(export)
+fit_ids = matches.loc[matches.game_start_ts < cut, "match_id"]
+pool, shares = predict._pool_and_shares(history, fit_ids)
+# _table_for activa inferred_positions=True y final_features=True.
+table = predict._table_for(export, pool, shares)
+fit = table[table.game_start_ts < cut].copy()
+test = table[table.game_start_ts > cut].copy()
+if fit.empty or test.empty:
+    raise ValueError("Se necesitan partidas a ambos lados del corte")
+output = Path("data/models/modelo_propio.joblib")
+if output.exists():
+    raise FileExistsError("Conserva el modelo congelado y sus resultados")
+bundle = predict.fit_final_model(fit, pool, shares)
+assert bundle["features"] == build.FINAL_FEATURES
+predict.save_model(bundle, output)
+prob = bundle["model"].predict_proba(test[bundle["features"]])[:, 1]
+print("Partidas nuevas", len(test))
+print(train.evaluate(test.blue_win.astype(int), prob))
+PY
 ```
 
-El export incluye `participant_spells.csv`. La receta final previa usó `build.build(inferred_positions=True)` y diez variables congeladas en `build.FINAL_FEATURES`. La llamada sin ese argumento conserva las posiciones que Riot asignó al terminar, por lo que el comando general de variables no reproduce por sí solo esa receta final.
-
-Inferimos posiciones con hechizos, campeón e historial anterior. Asignamos una posición distinta a cada integrante. El rango consultado después de jugar quedó como contexto y no entró como predictor. Los datos faltantes no se interpretaron como falta de habilidad.
+El pool y las frecuencias de posición usan solo historiales del ajuste. La construcción filtra los antecedentes por la fecha de cada partida. Los faltantes pasan por el imputador del modelo. Conserva el corte, el bundle, las exportaciones y las métricas para identificar esta evaluación. Repetirla sobre las mismas partidas no aporta evidencia nueva. Esta receta usa funciones del proyecto y guarda un modelo propio separado del histórico.
 
 ## Modelo previo y pruebas históricas
 
@@ -108,18 +137,19 @@ El registro `data/predictions/live_log.csv` permite puntuar después las partida
 python scripts/download_timelines.py --max 2800 --minutes 75
 python scripts/check_timeline_consistency.py
 python -m src.models.ingame --help
-python -m src.models.ingame --train --before 2026-11-09T18:09:41+00:00
+CORTE=2026-11-18T00:00:00+00:00
+python -m src.models.ingame --train --before "$CORTE" --model data/models/estado_propio.joblib
 ```
 
 La descarga se reanuda desde la caché y se detiene ante credenciales rechazadas. La comprobación contrasta eventos y totales de objetivos y escribe `data/analysis/consistencia.md`. El entrenamiento lee datos locales, sin llamadas a Riot.
 
-La receta de estado usa diferencias azul menos rojo hasta el cuadro observado. Un modelo corresponde a cada minuto. Para una evaluación nueva con datos propios hay que fijar otro corte y reservar prueba antes de entrenar. La orden histórica de evaluación fue la siguiente, ya completada.
+La receta de estado usa diferencias azul menos rojo hasta el cuadro observado. Un modelo corresponde a cada minuto. Sustituye la fecha del ejemplo por el corte reservado para tus datos, antes de entrenar. Evalúa una sola vez con el mismo corte y bundle, sin reajustar.
 
 ```bash
-python -m src.models.ingame --evaluate --after 2026-11-09T18:09:41+00:00
+python -m src.models.ingame --evaluate --after "$CORTE" --model data/models/estado_propio.joblib
 ```
 
-No la repitas sobre la prueba original. Los minutos finales pueden incluir cuadros de partidas ya terminadas. Esa limitación debe acompañar la interpretación de las tasas.
+El estudio original usó el corte 2026-11-09T18:09:41+00:00. No repitas una evaluación sobre partidas ya usadas. Estos comandos propios no producen las tablas confirmatorias del estudio original. Los minutos finales pueden incluir cuadros de partidas ya terminadas. Esa limitación debe acompañar la interpretación de las tasas.
 
 ## Análisis y regeneración de la demo
 
@@ -131,7 +161,17 @@ python -m scripts.analisis.objetivos
 python scripts/build_demo.py
 ```
 
-`--debug` usa entrenamiento. `--final` realiza la evaluación confirmatoria y conserva una guardia contra repeticiones. La comparación del previo inserta sus filas una sola vez. Esas órdenes requieren los modelos congelados, la base, exportaciones, caché y registros originales. El [protocolo](../scripts/analisis/protocolo.md) conserva las decisiones previas. No se reconstruyen los resultados originales solo con los ejemplos públicos.
+Estas órdenes documentan el estudio original y no son una receta general para datos propios.
+
+| Orden | Requisitos y alcance |
+|---|---|
+| `minuto --debug` | Necesita SQLite, sal de exportación, partidas completas y timelines locales, además de `data/models/modelo_final_2026-11-09.joblib`. Usa únicamente filas anteriores al corte fijo 2026-11-09T18:09:41+00:00. Entrena los modelos de estado con todas esas filas y limita a cien partidas el cálculo previo fuera de muestra. Escribe `debug_entrenamiento.json`, sin evaluar prueba ni generar las tablas finales. |
+| `minuto --final` | Necesita lo anterior, `data/export/` original y `data/models/segunda_prueba.json`. Reconstruye la pertenencia y exige las 1.264 partidas de la segunda prueba. Usa el mismo corte fijo, espera una descarga local activa y conserva `evaluacion_iniciada.json` contra repeticiones. |
+| `previo_misma_poblacion` | Necesita el modelo histórico fechado, `modelos_en_partida.joblib`, `segunda_prueba.json`, la guardia, exportación y caché originales, y `predictibilidad.csv` aún sin las filas de esta corrección. No entrena ni ejecuta `--final`. Añade el previo en las mismas partidas de cada minuto y se detiene si ya se aplicó. |
+| `objetivos` | Lee partidas completas en `data/raw/matches/*.gz`, sin modelos ni timelines. Filtra Solo/Dúo y duración mínima de cinco minutos, agrega objetivos y genera su tabla y figura. Puede describir otra colección local, con sus propios tamaños y límites. |
+| `build_demo` | Requiere productos locales ya calculados, modelos, tablas, figuras y ejemplos. No calcula una evaluación ni reconstruye los datos privados desde `demo/`. |
+
+El modelo histórico fechado contiene el pipeline, las diez variables, el pool, las frecuencias por posición y los identificadores de ajuste y desarrollo. El modelo reducido de `demo/` no lo sustituye. Los archivos privados originales no están en el repositorio. Cambiar solo la ruta del modelo o el corte no adapta las comprobaciones históricas a otra muestra. El [protocolo](../scripts/analisis/protocolo.md) conserva las decisiones previas. No se reconstruyen los resultados originales solo con los ejemplos públicos.
 
 Los análisis escriben tablas, auditorías y figuras en `data/analysis/`, temporales en `data/analysis/tmp/`, modelos en `data/models/` y ejemplos en `data/app/`. No hay que ejecutarlos para presentar.
 

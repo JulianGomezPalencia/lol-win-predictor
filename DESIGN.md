@@ -10,7 +10,7 @@ Georgia en títulos y sistema sans serif para controles y lectura. Cifras tabula
 Cabecera breve, navegación horizontal y una sola vista activa. Equipos en dos columnas, posiciones alineadas en filas. Gráficos anchos con ejes y leyenda. Repetición con reloj, probabilidad y lista de eventos hasta el minuto visible. Objetivos en filas, con tasa y muestra juntas.
 
 ## Interacción
-Foco visible, botones de al menos 44 px y mensajes de carga o error en una región anunciada. P entra o sale de presentación. Las flechas recorren cuatro vistas y regresan a la votación. En repetición, derecha avanza el reloj hasta el final, con pausa en el 15. El botón Siguiente vista permite salir antes. R selecciona una remontada sin mostrar una pista al público.
+Foco visible, botones de al menos 44 px y mensajes de carga o error en una región anunciada. P entra o sale de presentación. Las flechas recorren votación, acierto, repetición, objetivos y Qué aprendimos antes de regresar a la votación. En repetición, derecha avanza el reloj hasta el final, con pausa en el 15. El botón Siguiente vista permite salir antes. R selecciona una remontada sin mostrar una pista al público.
 
 ## Adaptación
 A 1280 por 720 la presentación conserva controles y gráficos dentro del alto disponible. A 1920 por 1080 gana aire. En móvil se apilan equipos y formularios. Movimiento reducido respeta la preferencia del sistema.

@@ -7,7 +7,7 @@ web
 Estudiantes y una profesora de inteligencia artificial miran una presentación proyectada. Dos personas conducen una demostración de cinco minutos. El público vota y compara su intuición con probabilidades calculadas antes y durante una partida.
 
 ## Contexto de uso
-La demostración debe funcionar sin internet, sin credenciales y sin datos privados. El recorrido proyectado pasa por votación, evolución del acierto, repetición y objetivos, antes de regresar a revelar el ganador.
+La demostración debe funcionar sin internet, sin credenciales y sin datos privados. El recorrido proyectado pasa por votación, evolución del acierto, repetición, objetivos y Qué aprendimos, antes de regresar a revelar el ganador.
 
 ## Capacidades y límites
 Siete vistas, calculadora de diez variables y consulta en vivo opcional. Los modelos se conservan congelados. Las cifras proceden de las tablas distribuidas. Las tasas de objetivos muestran asociación, no causalidad. Ninguna respuesta publica identificadores de jugadores o partidas.

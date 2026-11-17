@@ -59,10 +59,15 @@ function show(index) {
   accuracyChart?.resize();
   replayChart?.resize();
 }
+const presentationViews = [0, 1, 2, 3, 6];
+function moveView(direction) {
+  if (document.body.classList.contains("presenting")) {
+    const index = presentationViews.indexOf(view);
+    show(presentationViews[(index + direction + presentationViews.length) % presentationViews.length]);
+  } else show(view + direction);
+}
 function next() {
-  show(
-    document.body.classList.contains("presenting") ? (view + 1) % 4 : view + 1,
-  );
+  moveView(1);
 }
 function renderTeams() {
   $("teams").replaceChildren();
@@ -115,6 +120,7 @@ function refreshCharts() {
     chart.options.plugins.legend.labels.font.size = chartFont();
     chart.options.scales.x.ticks.font.size = chartFont();
     chart.options.scales.y.ticks.font.size = chartFont();
+    chart.options.scales.x.title.font ??= {};
     chart.options.scales.x.title.font.size = chartFont();
     chart.update("none");
     chart.resize();
@@ -212,8 +218,8 @@ function drawReplay() {
           type: "linear",
           min: 0,
           max: replay.curva.at(-1).minuto,
-          title: { display: true, text: "Minuto" },
-          ticks: { font: { size: 16 } },
+          title: { display: true, text: "Minuto", font: { size: chartFont() } },
+          ticks: { font: { size: chartFont() } },
         },
       },
     },
@@ -229,7 +235,7 @@ async function presentation() {
   const active = document.body.classList.toggle("presenting");
   $("present").textContent = active ? "Salir de presentación" : "Presentar P";
   if (active) {
-    if (view > 3) show(0);
+    if (!presentationViews.includes(view)) show(0);
     try {
       await document.documentElement.requestFullscreen();
     } catch (_) {
@@ -243,10 +249,7 @@ document
   .forEach((b) => (b.onclick = () => show(+b.dataset.view)));
 $("present").onclick = safe(presentation);
 $("next").onclick = next;
-$("previous").onclick = () =>
-  show(
-    document.body.classList.contains("presenting") ? (view + 3) % 4 : view - 1,
-  );
+$("previous").onclick = () => moveView(-1);
 $("example").onchange = renderTeams;
 $("reset-votes").onclick = renderTeams;
 $("prediction").onclick = safe(async () => {
