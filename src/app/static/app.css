@@ -927,3 +927,30 @@ input, select {
   }
   body.presenting #view-0 > .teams { margin-block: 4px; }
 }
+
+#live-result .live-head {
+  display: block;
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+#live-result .live-detail {
+  font-size: 22px;
+  font-weight: 400;
+  margin: 6px 0;
+  max-width: 60ch;
+}
+#live-result .live-factors {
+  font-size: 22px;
+  font-weight: 400;
+  margin: 4px 0 0;
+  padding-left: 1.2em;
+}
+#live-result .live-factors span {
+  font-weight: 600;
+}
+#live-result .live-factors .azul {
+  color: var(--blue);
+}
+#live-result .live-factors .rojo {
+  color: var(--red);
+}

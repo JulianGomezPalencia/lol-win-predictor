@@ -367,6 +367,28 @@ $("calculator").onsubmit = safe(async (e) => {
     button.disabled = false;
   }
 });
+function liveSummary(data) {
+  const blue = Math.round(data.prob_azul * 100);
+  const red = 100 - blue;
+  const head = data.favorito
+    ? `Gana el ${data.favorito}: ${data.favorito === "azul" ? blue : red} % contra ${data.favorito === "azul" ? red : blue} %`
+    : `Partida pareja: azul ${blue} %, rojo ${red} %`;
+  const detail = data.confianza.replace(/^Predicción: gana el equipo \w+\. /, "");
+  const parts = [node("strong", head, "live-head"), node("p", detail, "live-detail")];
+  const factors = data.factores.filter((f) => f.favorece && f.dato);
+  if (factors.length) {
+    parts.push(node("p", "Lo que más pesó en el cálculo:", "live-detail"));
+    const list = document.createElement("ul");
+    list.className = "live-factors";
+    factors.forEach((f) => {
+      const item = node("li", ` ${f.dato.charAt(0).toUpperCase()}${f.dato.slice(1)}.`);
+      item.prepend(node("span", `A favor del ${f.favorece}:`, f.favorece));
+      list.append(item);
+    });
+    parts.push(list);
+  }
+  return parts;
+}
 $("live-form").onsubmit = safe(async (e) => {
   e.preventDefault();
   e.submitter.disabled = true;
@@ -378,8 +400,7 @@ $("live-form").onsubmit = safe(async (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jugador: $("player").value }),
     });
-    $("live-result").textContent =
-      `${percent(data.prob_azul)} para el azul. ${data.confianza} ${data.factores.map((f) => f.frase).join(" ")}`;
+    $("live-result").replaceChildren(...liveSummary(data));
   } catch (error) {
     $("live-result").textContent = error.message;
   } finally {

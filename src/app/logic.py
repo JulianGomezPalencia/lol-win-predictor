@@ -6,7 +6,7 @@ from pathlib import Path
 
 from src.features.timeline import STATE_FEATURES, participant_teams
 from src.models import ingame, predict
-from src.models.explain import contributions
+from src.models.explain import LABELS, contributions
 
 ROOT = Path(__file__).resolve().parents[2]
 def asset_path(local, demo):
@@ -131,10 +131,14 @@ def replay(match_id, bundle, endpoints=None):
 def live(riot_id, bundle, progress=lambda _: None):
     names = champion_names()
     result = predict.predict_live(riot_id, bundle, progress=progress, names=names, persist=False)
+    summary = predict.confidence_summary(result["prob_blue"], predict._selectivity(bundle, predict.MODELS_DIR))
     return {"prob_azul": result["prob_blue"], "confianza": predict._confidence_line(result["prob_blue"], bundle),
+            "favorito": summary["favorito"], "nivel": summary["nivel"],
             "equipos": {label: [(POSITIONS.get(pos, "Posición por estimar"), champion if champion in names.values() else "Campeón")
                         for pos, champion in result["teams"].get(team, [])] for team, label in [(100, "azul"), (200, "rojo")]},
-            "factores": [{"aporte": c["aporte"], "frase": c["frase"]} for c in contributions(bundle, result["feature_values"])[:3]]}
+            "factores": [{"aporte": c["aporte"], "frase": c["frase"], "dato": LABELS.get(c["variable"], ""),
+                          "favorece": "azul" if c["aporte"] > 0 else "rojo" if c["aporte"] < 0 else None}
+                         for c in contributions(bundle, result["feature_values"])[:3]]}
 
 
 def findings_paths(analysis=None, figures=None):

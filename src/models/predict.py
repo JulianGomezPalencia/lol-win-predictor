@@ -67,6 +67,7 @@ CONTEXT_COLUMNS = ["game_id", "platform", "timestamp", "team_id", "posicion", "c
                    "tier", "division", "lp", "wins", "losses", "maestria_puntos", "segundos_de_partida"]
 ABSTAIN_BELOW = 0.55
 CONFIDENCE_LEVELS = [(0.65, "alta"), (0.60, "media"), (0.55, "baja")]
+CONFIDENCE_MEANING = {"alta": "ventaja clara", "media": "ventaja moderada", "baja": "el modelo duda"}
 RANKED_SOLO_QUEUE = 420
 MIN_FINISHED_FOR_AUC = 10
 BUNDLE_VERSION = 2
@@ -194,13 +195,15 @@ def _confidence_line(prob_blue, bundle, models_dir=None):
     confidence = _percent(summary["confianza"])
     if summary["abstencion"]:
         return f"Partida pareja: sin predicción (confianza {confidence}, por debajo de 55 %)."
-    text = f"Predicción: gana el equipo {summary['favorito']}. Confianza {summary['nivel']} ({confidence})."
+    text = (f"Predicción: gana el equipo {summary['favorito']}. "
+            f"Confianza {summary['nivel']} ({confidence}): {CONFIDENCE_MEANING[summary['nivel']]}.")
     if summary.get("acierto_historico") is not None:
         threshold = max(r["threshold"] for r in selective
                         if summary["confianza"] >= r["threshold"])
-        source = " de la versión probada del modelo" if bundle.get("modelo_probado") else ""
-        text += (f" En la segunda prueba{source}, con confianza de {threshold * 100:.0f} % o más "
-                 f"acertó el {_percent(summary['acierto_historico'])} de {summary['n_historico']} partidas.")
+        source = " (dato de la versión probada del modelo)" if bundle.get("modelo_probado") else ""
+        text += (f" Con partidas que no había visto, cuando tuvo {threshold * 100:.0f} % o más "
+                 f"de confianza acertó el {_percent(summary['acierto_historico'])} de {summary['n_historico']} partidas, "
+                 f"unas {round(summary['acierto_historico'] * 10)} de cada 10{source}.")
     return text
 
 # --- One path for every prediction: players + their histories -> probability ----------------
