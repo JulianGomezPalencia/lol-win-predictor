@@ -42,7 +42,7 @@ La regla de elegir al equipo con más oro al 15 acertó 73,54 % (69,17 a 77,91).
 
 En el análisis de objetivos conservamos 180.282 partidas. El equipo con primera torre ganó 68,28 % (68,06 a 68,49, n = 177.993) y con primer inhibidor 89,18 % (89,02 a 89,33, n = 159.560). Son asociaciones con denominadores distintos, no efectos causales.
 
-En vivo acertamos 12 de 27 partidas terminadas, un 44,4 % (intervalo Wilson 27,6 a 62,7). La muestra no alcanza para concluir. Los historiales de semillas sobrerrepresentaron rangos altos y jugadores activos de LAN. Compartimos jugadores entre ajuste y prueba y los intervalos por partida no corrigieron esa dependencia.
+En vivo acertamos 15 de 33 partidas terminadas del modelo evaluado, un 45,5 % (intervalo Wilson del 95 % de 29,8 a 62,0). Otra predicción pertenece a una versión distinta y se excluye. Con confianza de al menos 55 %, acertamos 12 de 20, un 60,0 % (38,7 a 78,1). La muestra no alcanza para concluir. Los historiales de semillas sobrerrepresentaron rangos altos y jugadores activos de LAN. Compartimos jugadores entre ajuste y prueba y los intervalos por partida no corrigieron esa dependencia.
 
 Conservamos los datos brutos en privado y distribuimos ejemplos sin nombres ni identificadores de jugadores o partidas. El permiso académico documentado no otorga una licencia abierta a esos datos. No usamos las probabilidades para evaluar personas. Respetamos los términos de Riot y excluimos funciones de apuestas del producto.
 
@@ -58,7 +58,7 @@ python -m scripts.export_dataset
 
 La [receta para datos propios](docs/uso_avanzado.md#variables-y-posiciones) fija un corte nuevo, construye el historial de campeones solo con entrenamiento, infiere posiciones antes de jugar y ajusta exclusivamente las diez variables de `build.FINAL_FEATURES`. Incluye una evaluación posterior sin reajuste. Los comandos generales `python -m src.features.build` y `python -m src.models.train` son exploratorios y no reproducen esa receta.
 
-Los análisis de `scripts/analisis/` tienen requisitos distintos. `minuto --debug` solo comprueba entrenamiento, limita a cien partidas el cálculo previo fuera de muestra y no genera una evaluación nueva. Tanto ese modo como `--final` necesitan el modelo histórico privado `data/models/modelo_final_2026-11-09.joblib`. El análisis final además exige exportaciones, registros y caché originales, usa el corte fijo del 9 de noviembre de 2026 y comprueba las 1.264 partidas originales. Esos archivos no están en un clon y la demo no los reconstruye. Cambiar solo el modelo o la fecha no adapta ese estudio a otra muestra.
+Los análisis de `scripts/analisis/` tienen requisitos distintos. `minuto --debug` solo comprueba entrenamiento, limita a cien partidas el cálculo previo fuera de muestra y no genera una evaluación nueva. Tanto ese modo como `--final` necesitan el modelo histórico privado `data/models/modelo_final_2026-11-09.joblib`. El análisis final además exige exportaciones, registros y caché originales, usa el corte fijado al congelar el modelo y comprueba las 1.264 partidas originales. Esos archivos no están en un clon y la demo no los reconstruye. Cambiar solo el modelo o la fecha no adapta ese estudio a otra muestra.
 
 Para entrenar y evaluar estados por minuto con otro corte, y para conocer los requisitos de objetivos y de la comparación previa, consulta [uso avanzado](docs/uso_avanzado.md#líneas-de-tiempo-y-modelos-por-minuto) y el [protocolo histórico](scripts/analisis/protocolo.md).
 

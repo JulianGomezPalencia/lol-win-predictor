@@ -149,7 +149,7 @@ La receta de estado usa diferencias azul menos rojo hasta el cuadro observado. U
 python -m src.models.ingame --evaluate --after "$CORTE" --model data/models/estado_propio.joblib
 ```
 
-El estudio original usó el corte 2026-11-09T18:09:41+00:00. No repitas una evaluación sobre partidas ya usadas. Estos comandos propios no producen las tablas confirmatorias del estudio original. Los minutos finales pueden incluir cuadros de partidas ya terminadas. Esa limitación debe acompañar la interpretación de las tasas.
+El estudio original usó el corte `2026-11-09T18:09:41+00:00`. No repitas una evaluación sobre partidas ya usadas. Estos comandos propios no producen las tablas confirmatorias del estudio original. Los minutos finales pueden incluir cuadros de partidas ya terminadas. Esa limitación debe acompañar la interpretación de las tasas.
 
 ## Análisis y regeneración de la demo
 
@@ -165,7 +165,7 @@ Estas órdenes documentan el estudio original y no son una receta general para d
 
 | Orden | Requisitos y alcance |
 |---|---|
-| `minuto --debug` | Necesita SQLite, sal de exportación, partidas completas y timelines locales, además de `data/models/modelo_final_2026-11-09.joblib`. Usa únicamente filas anteriores al corte fijo 2026-11-09T18:09:41+00:00. Entrena los modelos de estado con todas esas filas y limita a cien partidas el cálculo previo fuera de muestra. Escribe `debug_entrenamiento.json`, sin evaluar prueba ni generar las tablas finales. |
+| `minuto --debug` | Necesita SQLite, sal de exportación, partidas completas y timelines locales, además de `data/models/modelo_final_2026-11-09.joblib`. Usa únicamente filas anteriores al corte fijo `2026-11-09T18:09:41+00:00`. Entrena los modelos de estado con todas esas filas y limita a cien partidas el cálculo previo fuera de muestra. Escribe `debug_entrenamiento.json`, sin evaluar prueba ni generar las tablas finales. |
 | `minuto --final` | Necesita lo anterior, `data/export/` original y `data/models/segunda_prueba.json`. Reconstruye la pertenencia y exige las 1.264 partidas de la segunda prueba. Usa el mismo corte fijo, espera una descarga local activa y conserva `evaluacion_iniciada.json` contra repeticiones. |
 | `previo_misma_poblacion` | Necesita el modelo histórico fechado, `modelos_en_partida.joblib`, `segunda_prueba.json`, la guardia, exportación y caché originales, y `predictibilidad.csv` aún sin las filas de esta corrección. No entrena ni ejecuta `--final`. Añade el previo en las mismas partidas de cada minuto y se detiene si ya se aplicó. |
 | `objetivos` | Lee partidas completas en `data/raw/matches/*.gz`, sin modelos ni timelines. Filtra Solo/Dúo y duración mínima de cinco minutos, agrega objetivos y genera su tabla y figura. Puede describir otra colección local, con sus propios tamaños y límites. |
