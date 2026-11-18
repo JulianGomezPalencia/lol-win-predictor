@@ -64,7 +64,7 @@ Para entrenar y evaluar estados por minuto con otro corte, y para conocer los re
 
 ## Autores
 
-Julian Gomez y Carlos Eduardo Pardo Pinilla.
+Julian Ricardo Gomez Palencia (2191553) y Carlos Eduardo Pardo Pinilla (2210075).
 
 Inteligencia Artificial 1 · Universidad Industrial de Santander (UIS) · 2026.
 
