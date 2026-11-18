@@ -62,9 +62,9 @@ Los análisis de `scripts/analisis/` tienen requisitos distintos. `minuto --debu
 
 Para entrenar y evaluar estados por minuto con otro corte, y para conocer los requisitos de objetivos y de la comparación previa, consulta [uso avanzado](docs/uso_avanzado.md#líneas-de-tiempo-y-modelos-por-minuto) y el [protocolo histórico](scripts/analisis/protocolo.md).
 
-## Autor
+## Autores
 
-Julian Gomez
+Julian Gomez y Carlos Eduardo Pardo Pinilla.
 
 Inteligencia Artificial 1 · Universidad Industrial de Santander (UIS) · 2026.
 
